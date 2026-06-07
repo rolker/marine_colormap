@@ -36,9 +36,12 @@ void expect_color(const Rgba8 & c, int r, int g, int b, int a = 255)
 
 TEST(Palette, RegistryIsAppendOnlyAndNameKeyed)
 {
-  ASSERT_EQ(marine_colormap::palette_count(), 3u);
+  // Append-only contract: the first three indices are stable and name-keyed;
+  // count may grow as palettes are appended (e.g. viridis/turbo), so assert
+  // >= 3 rather than an exact count that would break on every addition.
+  ASSERT_GE(marine_colormap::palette_count(), 3u);
   const auto & names = marine_colormap::palette_names();
-  ASSERT_EQ(names.size(), 3u);
+  ASSERT_GE(names.size(), 3u);
   EXPECT_EQ(names[0], "grayscale");
   EXPECT_EQ(names[1], "bronze");
   EXPECT_EQ(names[2], "thermal");

@@ -23,11 +23,14 @@ namespace marine_colormap
 namespace
 {
 
-// Value-dependent alpha from the (clamped) normalized position.
+// Value-dependent alpha from the (clamped) normalized position. The result is
+// clamped to [0, 1] so an out-of-range or non-finite alpha_min/alpha_max can't
+// push Rgba.a outside its documented [0, 1] contract on the float path (the
+// 8-bit LUT path is clamped again by to_rgba8).
 float alpha_for(float normalized, const TransferParams & p)
 {
   const float c = std::clamp(normalized, 0.0f, 1.0f);
-  return p.alpha_min + (p.alpha_max - p.alpha_min) * c;
+  return std::clamp(p.alpha_min + (p.alpha_max - p.alpha_min) * c, 0.0f, 1.0f);
 }
 
 }  // namespace
