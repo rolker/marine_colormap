@@ -28,6 +28,34 @@ path uploads as a texture). Consumers convert the plain color type to
 - `marine_colormap/colormap.hpp` — `lookup(value, palette, params)` (CPU) and
   `bake_lut(palette, params, n)` (the 1-D LUT for the GPU path). By construction
   `lookup(v)` equals the LUT indexed at `normalize(v, min, max)`.
+- `marine_colormap/shader.hpp` — `colormap_glsl()`: GL-free GLSL source (the
+  GPU/Tier-2 math), see below.
+
+## GPU (GLSL) usage
+
+For the >8-bit / GPU path, `colormap_glsl()` returns version-agnostic GLSL
+defining `marine_colormap_normalize()` and `marine_colormap_response()`, which
+mirror the CPU `normalize()` / `apply_response()` so the GPU result matches the
+CPU path. The renderer plumbing (texture upload, samplers, `main()`) is
+per-substrate (Qt-GL, Ogre) and lives in each consumer; only the math + LUT are
+shared. Recipe:
+
+1. Upload the scalar field as an **R32F** texture — full-precision input, so the
+   colormap is *not* bound to 8-bit data.
+2. Upload `bake_lut(palette, marine_colormap::TransferParams{}, N)` (identity
+   transfer) as an Nx1 **RGBA8** 1-D LUT texture.
+3. Prepend your own `#version` (and `precision highp float;` on GLES — dB-range
+   data bands at mediump), declare your samplers, then in `main()`:
+   ```glsl
+   float t = marine_colormap_response(
+               marine_colormap_normalize(value, u_min, u_max), u_gain, u_contrast);
+   color = texture(u_lut, vec2(t, 0.5));
+   ```
+4. Handle below-floor / no-data sentinels in your own `main()` (a clamped LUT
+   coordinate can't represent them).
+
+> Numeric parity of the shader vs the CPU path is validated by the first GPU
+> consumer (an offscreen-GL test), not in this package (which is GL-free).
 
 ## Palettes
 
