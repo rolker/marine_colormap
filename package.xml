@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>marine_colormap</name>
+  <version>0.1.0</version>
+  <description>Shared, framework-agnostic scalar-field colormap library: named
+  palettes plus a transfer function (range normalize, gain, contrast/gamma,
+  alpha) mapping a value to a color, with a CPU lookup and a bake_lut() for the
+  GPU 1-D LUT path. No Qt / Ogre / GL dependencies. See ADR-0001 in
+  unh_marine_autonomy.</description>
+  <maintainer email="roland@ccom.unh.edu">Roland Arsenault</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
