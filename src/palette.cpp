@@ -22,6 +22,13 @@
 namespace marine_colormap
 {
 
+namespace detail
+{
+// Defined in perceptual_palettes.cpp (generated canonical viridis/turbo tables).
+std::vector<Rgba> viridis_colors();
+std::vector<Rgba> turbo_colors();
+}  // namespace detail
+
 Palette::Palette(std::string name, std::vector<ColorStop> stops)
 : name_(std::move(name)), stops_(std::move(stops))
 {
@@ -96,6 +103,8 @@ const std::vector<Palette> & registry()
           rgb8(38, 166, 138), rgb8(18, 156, 105), rgb8(161, 209, 61),
           rgb8(252, 179, 46), rgb8(250, 94, 153), rgb8(252, 48, 97),
           rgb8(219, 41, 51), rgb8(166, 51, 51), rgb8(153, 10, 15)}),
+    even("viridis", detail::viridis_colors()),
+    even("turbo", detail::turbo_colors()),
   };
   return kPalettes;
 }

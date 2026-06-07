@@ -31,9 +31,10 @@ path uploads as a texture). Consumers convert the plain color type to
 
 ## Palettes
 
-`grayscale`, `bronze`, `thermal`. The perceptual ramps `viridis` and `turbo` are
-planned and will be imported from their **canonical published tables**
-(matplotlib viridis / Google turbo) rather than hand-rolled.
+`grayscale`, `bronze`, `thermal`, `viridis`, `turbo`. The perceptual ramps
+`viridis` (van der Walt & Smith) and `turbo` (Mikhailov, Google) are the exact
+**canonical 256-entry tables** as distributed by matplotlib — embedded in
+`src/perceptual_palettes.cpp`, not hand-rolled.
 
 ## License
 
