@@ -79,12 +79,18 @@ check (the GPU-path guarantee). `colcon test`: 72 tests, 0 failures.
 **CI**: all-pass (build-and-test + copilot-pull-request-reviewer)
 
 ### Findings
-- [ ] (cross-confirmed: Copilot R1 + Local Review pre-push) Palette ctor stores stops unsorted; sample() assumes ascending t -> wrong colors for unsorted input; sort/validate in ctor + test — `src/palette.cpp:25-28`
-- [ ] (valid, Copilot R1) test uses std::out_of_range without `#include <stdexcept>` (transitive-include fragility) — `test/test_palette.cpp:18`
-- [ ] (must-fix, Local Review) to_rgba8 non-finite channel -> lround(NaN) undefined; guard !isfinite -> 0 — `color.hpp:60`
-- [ ] (suggestion, Local Review) document apply_response clamp points as GPU-port contract + combined gain!=1 & contrast!=1 test — `transfer.cpp:33`
-- [ ] (suggestion, Local Review) strengthen CPU==LUT equivalence test with off-grid values + tolerance — `test_colormap.cpp:88`
-- [ ] (suggestion, Local Review) document sentinel precedence + alpha-ramp-on-normalized-position — `colormap.cpp:40,46`
+- [x] (cross-confirmed: Copilot R1 + Local Review pre-push) Palette ctor stores stops unsorted; sample() assumes ascending t -> wrong colors for unsorted input; sort/validate in ctor + test — `src/palette.cpp:25-28` (fixed: stable_sort in ctor + ConstructorSortsUnsortedStops test)
+- [x] (valid, Copilot R1) test uses std::out_of_range without `#include <stdexcept>` (transitive-include fragility) — `test/test_palette.cpp:18` (fixed: added include)
+- [x] (must-fix, Local Review) to_rgba8 non-finite channel -> lround(NaN) undefined; guard !isfinite -> 0 — `color.hpp:60` (fixed)
+- [x] (suggestion, Local Review) document apply_response clamp points as GPU-port contract + combined gain!=1 & contrast!=1 test — `transfer.cpp:33` (fixed: header contract block + ResponseGainThenGammaClampOrder test)
+- [x] (suggestion, Local Review) strengthen CPU==LUT equivalence test with off-grid values + tolerance — `test_colormap.cpp:88` (fixed: CpuLookupMatchesLutOffGrid)
+- [x] (suggestion, Local Review) document sentinel precedence + alpha-ramp-on-normalized-position — `colormap.cpp:40,46` (fixed: lookup() doc)
 
 ### False positives
 - none — both Copilot comments valid; both reviewers' earlier alpha CPU/LUT-divergence concern was already withdrawn in the pre-push review (consistent up to quantization).
+
+### Resolution (fixes applied)
+**When**: 2026-06-07 · **By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+- All findings addressed in `a9b45f6`. colcon test: 75 tests, 0 failures (was 72;
+  +3 regression tests: unsorted-stops, combined gain/contrast clamp-order,
+  off-grid CPU==LUT equivalence).
