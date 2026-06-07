@@ -40,3 +40,27 @@ version-agnostic. `colcon test`: 97 tests, 0 failures.
   This package stays GL-free, so the validation lives where the GL context does.
 - Remaining Tier-2 work (separate issues, post-freeze): rqt QOpenGLWidget GPU
   waterfall, rviz Ogre material, CAMP GL viewport (camp#63).
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-06-07 18:47 -04:00
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**PR**: #6 at `f136bcc`
+**Sources**: 1 (Copilot R1 @ `f136bcc`); local timeline empty (no Local Review run)
+**Cross-source confirmations**: 0
+**CI**: all-pass (build-and-test)
+
+### Findings
+- [ ] (valid, Copilot R1) Double-transfer footgun: docs say upload
+  `bake_lut(palette, TransferParams{}, N)` (identity) **and** the shader applies
+  `marine_colormap_response(..., u_gain, u_contrast)`. A consumer that instead
+  bakes non-identity gain/contrast/alpha into the LUT *and* keeps the shader
+  response would apply the transfer twice. Spell out the rule: when using the
+  shader response, the LUT must stay identity (gain=1, contrast=1, alpha_ramp
+  off); to bake the transfer into the LUT instead, drop the shader response —
+  pick one split. Same point, two locations: `README.md:46`,
+  `include/marine_colormap/shader.hpp:38`.
+
+### False positives
+- none — the single Copilot finding is valid (a real documentation footgun).
