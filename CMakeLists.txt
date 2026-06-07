@@ -23,6 +23,7 @@ find_package(ament_cmake REQUIRED)
 
 add_library(${PROJECT_NAME}
   src/palette.cpp
+  src/perceptual_palettes.cpp
   src/transfer.cpp
   src/colormap.cpp)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)

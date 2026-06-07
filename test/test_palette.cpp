@@ -45,10 +45,25 @@ TEST(Palette, RegistryIsAppendOnlyAndNameKeyed)
   EXPECT_EQ(names[0], "grayscale");
   EXPECT_EQ(names[1], "bronze");
   EXPECT_EQ(names[2], "thermal");
+  EXPECT_EQ(names[3], "viridis");
+  EXPECT_EQ(names[4], "turbo");
   // Name -> index round-trips at stable indices.
   EXPECT_EQ(marine_colormap::palette_index("grayscale").value(), 0u);
   EXPECT_EQ(marine_colormap::palette_index("thermal").value(), 2u);
-  EXPECT_FALSE(marine_colormap::palette_index("viridis").has_value());
+  EXPECT_EQ(marine_colormap::palette_index("viridis").value(), 3u);
+  EXPECT_EQ(marine_colormap::palette_index("turbo").value(), 4u);
+  EXPECT_FALSE(marine_colormap::palette_index("plasma").has_value());
+}
+
+TEST(Palette, ViridisAndTurboGoldenEndpoints)
+{
+  // Canonical matplotlib endpoints (8-bit), locking the embedded tables.
+  const auto & v = *marine_colormap::find_palette("viridis");
+  expect_color(to_rgba8(v.sample(0.0f)), 68, 1, 84);
+  expect_color(to_rgba8(v.sample(1.0f)), 253, 231, 37);
+  const auto & t = *marine_colormap::find_palette("turbo");
+  expect_color(to_rgba8(t.sample(0.0f)), 48, 18, 59);
+  expect_color(to_rgba8(t.sample(1.0f)), 122, 4, 3);
 }
 
 TEST(Palette, FindAndIndexLookup)
