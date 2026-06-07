@@ -67,3 +67,24 @@ check (the GPU-path guarantee). `colcon test`: 72 tests, 0 failures.
 ### Dismissed (false positives)
 - Alpha CPU<->LUT divergence — both reviewers withdrew after tracing; consistent up to quantization.
 - Palette::sample boundary clamp; registry thread-safety (magic statics); CMake clean export; normalize NaN (guarded by lookup isfinite).
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-06-07 14:30 -04:00
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**PR**: #2 at `f15a0be`
+**Sources**: 2 (Copilot R1 @ `f15a0be`, Local Review (Pre-Push) @ `f15a0be`)
+**Cross-source confirmations**: 1
+**CI**: all-pass (build-and-test + copilot-pull-request-reviewer)
+
+### Findings
+- [ ] (cross-confirmed: Copilot R1 + Local Review pre-push) Palette ctor stores stops unsorted; sample() assumes ascending t -> wrong colors for unsorted input; sort/validate in ctor + test — `src/palette.cpp:25-28`
+- [ ] (valid, Copilot R1) test uses std::out_of_range without `#include <stdexcept>` (transitive-include fragility) — `test/test_palette.cpp:18`
+- [ ] (must-fix, Local Review) to_rgba8 non-finite channel -> lround(NaN) undefined; guard !isfinite -> 0 — `color.hpp:60`
+- [ ] (suggestion, Local Review) document apply_response clamp points as GPU-port contract + combined gain!=1 & contrast!=1 test — `transfer.cpp:33`
+- [ ] (suggestion, Local Review) strengthen CPU==LUT equivalence test with off-grid values + tolerance — `test_colormap.cpp:88`
+- [ ] (suggestion, Local Review) document sentinel precedence + alpha-ramp-on-normalized-position — `colormap.cpp:40,46`
+
+### False positives
+- none — both Copilot comments valid; both reviewers' earlier alpha CPU/LUT-divergence concern was already withdrawn in the pre-push review (consistent up to quantization).
