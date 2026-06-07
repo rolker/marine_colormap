@@ -34,8 +34,10 @@ namespace marine_colormap
 /// GPU pipeline (see README for the full recipe):
 ///   1. Upload the scalar field as an **R32F** texture -- full-precision input,
 ///      so the colormap is not bound to 8-bit data.
-///   2. Upload `bake_lut(palette, TransferParams{}, N)` (identity transfer) as
-///      an Nx1 RGBA8 1-D LUT texture.
+///   2. Upload `bake_lut(palette, TransferParams{}, N)` as an Nx1 RGBA8 1-D LUT
+///      texture. The params MUST be identity here (`TransferParams{}` -- gain 1,
+///      contrast 1, alpha_ramp off) because step 3 applies gain/contrast in the
+///      shader; see "do not double-apply" below.
 ///   3. Per fragment:
 ///        float t = marine_colormap_response(
 ///                    marine_colormap_normalize(value, u_min, u_max),
@@ -43,6 +45,12 @@ namespace marine_colormap
 ///        color = texture(u_lut, vec2(t, 0.5));
 ///   4. Handle the below-floor / no-data sentinels in your own `main()` -- a
 ///      clamped LUT coordinate cannot represent them.
+///
+/// Do not double-apply the transfer: either (a) bake an identity LUT and apply
+/// gain/contrast via marine_colormap_response in the shader (above -- makes them
+/// free uniforms), or (b) bake the real gain/contrast/alpha_ramp into the LUT
+/// (`bake_lut(pal, params, N)`) and DROP marine_colormap_response, sampling the
+/// LUT directly at the normalized value. Doing both applies gain/contrast twice.
 ///
 /// On GLES, declare `precision highp float;` -- dB-range data bands at mediump.
 const char * colormap_glsl();

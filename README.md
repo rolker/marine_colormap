@@ -42,8 +42,10 @@ shared. Recipe:
 
 1. Upload the scalar field as an **R32F** texture — full-precision input, so the
    colormap is *not* bound to 8-bit data.
-2. Upload `bake_lut(palette, marine_colormap::TransferParams{}, N)` (identity
-   transfer) as an Nx1 **RGBA8** 1-D LUT texture.
+2. Upload `bake_lut(palette, marine_colormap::TransferParams{}, N)` as an Nx1
+   **RGBA8** 1-D LUT texture. **`TransferParams{}` (identity — gain 1, contrast 1,
+   `alpha_ramp` off) is required here**, because step 3 applies gain/contrast in
+   the shader. See the "don't double-apply" note below.
 3. Prepend your own `#version` (and `precision highp float;` on GLES — dB-range
    data bands at mediump), declare your samplers, then in `main()`:
    ```glsl
@@ -54,8 +56,22 @@ shared. Recipe:
 4. Handle below-floor / no-data sentinels in your own `main()` (a clamped LUT
    coordinate can't represent them).
 
-> Numeric parity of the shader vs the CPU path is validated by the first GPU
-> consumer (an offscreen-GL test), not in this package (which is GL-free).
+> **Don't apply the transfer twice.** There are two equivalent splits — pick one:
+> - **Shader transfer (above):** bake the LUT with **identity** params
+>   (`TransferParams{}`) and apply gain/contrast via `marine_colormap_response`
+>   in `main()`. This makes gain/contrast/range free uniforms (no re-bake) — the
+>   recommended split for interactive viewers.
+> - **Baked transfer:** bake the LUT with your real gain/contrast/`alpha_ramp`
+>   (`bake_lut(pal, params, N)`) and **drop `marine_colormap_response`** from the
+>   shader (sample the LUT directly at `normalize(...)`). Re-bake on any
+>   gain/contrast change.
+>
+> Doing both — a non-identity baked LUT *and* the shader response — applies
+> gain/contrast twice.
+
+> Numeric parity of the shader response vs the CPU path is validated at the first
+> GPU consumer (rqt_sonar_waterfall#48: an offscreen-GL test), not in this
+> package (which is GL-free).
 
 ## Palettes
 
