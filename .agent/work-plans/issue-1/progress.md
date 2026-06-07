@@ -94,3 +94,22 @@ check (the GPU-path guarantee). `colcon test`: 72 tests, 0 failures.
 - All findings addressed in `a9b45f6`. colcon test: 75 tests, 0 failures (was 72;
   +3 regression tests: unsorted-stops, combined gain/contrast clamp-order,
   off-grid CPU==LUT equivalence).
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-06-07 14:48 -04:00
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+
+**PR**: #2 at `a05a5d0`
+**Sources**: 1 at head (Copilot R2 @ `a05a5d0`) + prior Integrated Review (R1 @ `f15a0be`, resolved)
+**Cross-source confirmations**: 0
+**CI**: all-pass (build-and-test + copilot-pull-request-reviewer)
+
+R1's findings (palette sorting, <stdexcept>) fixed in a9b45f6 and not re-raised. R2 is fresh observations on the cleaned-up head.
+
+### Findings
+- [ ] (suggestion, Copilot R2) test hard-codes palette_count()==3 / names.size()==3; breaks on append-only growth (viridis/turbo). Assert >=3 + keep index-0/1/2 name/index checks — `test/test_palette.cpp:39,41`
+- [ ] (suggestion, Copilot R2) alpha_for() can return alpha outside [0,1] if alpha_min/alpha_max set out of range/non-finite; violates Rgba [0,1] contract on the float path (8-bit LUT already clamps). Clamp alpha result to [0,1] — `src/colormap.cpp:31`
+
+### False positives
+- (Copilot R2) README ships only 3 palettes vs issue #1's viridis/turbo — already addressed: README Palettes section documents the deferral to canonical tables; it's a flagged sign-off decision, not an omission.
