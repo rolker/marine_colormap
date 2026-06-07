@@ -43,3 +43,27 @@ check (the GPU-path guarantee). `colcon test`: 72 tests, 0 failures.
   review). To be added from canonical published tables (matplotlib viridis /
   Google turbo) in a follow-up; the registry is append-only so they slot in
   without renumbering. Sonar consumers only need grayscale/bronze/thermal.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-06-07 14:16 -0400
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+**Verdict**: changes-requested (minor)
+
+**Branch**: feature/issue-1 at `f15a0be` (PR #2)
+**Mode**: pre-push
+**Depth**: Standard (new shared library, ~700 lines)
+**Static analysis**: clean (cpplint/cppcheck/uncrustify/copyright pass) | **Adversarial**: Claude + Copilot
+**Must-fix**: 2 | **Suggestions**: 4
+
+### Findings
+- [ ] (must-fix) to_rgba8: non-finite channel -> lround(NaN) is undefined; guard !isfinite -> 0 — `color.hpp:60`
+- [ ] (must-fix) Palette ctor does not sort/validate stops; sample() assumes ascending t (public-API footgun) — `palette.cpp:25`
+- [ ] (suggestion) Document apply_response exact clamp points as the GPU-port contract + add combined gain!=1 & contrast!=1 test — `transfer.cpp:33`
+- [ ] (suggestion) Equivalence test only hits exact grid points; add off-grid values at +/-1 LSB tolerance (with alpha_ramp/gain on) — `test_colormap.cpp:88`
+- [ ] (suggestion) Document sentinel precedence (below/nodata bypass alpha ramp) + alpha ramp is on normalized data position — `colormap.cpp:40,46`
+- [ ] (suggestion) Document/guard empty palette (opaque black), gain<0 (clamps 0), contrast<=0 (linear) — `palette.cpp:32`,`transfer.cpp:35`
+
+### Dismissed (false positives)
+- Alpha CPU<->LUT divergence — both reviewers withdrew after tracing; consistent up to quantization.
+- Palette::sample boundary clamp; registry thread-safety (magic statics); CMake clean export; normalize NaN (guarded by lookup isfinite).
