@@ -21,7 +21,10 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 
-add_library(${PROJECT_NAME}
+# SHARED so the library is position-independent and can link into downstream
+# shared libraries / rviz plugins (a default STATIC archive lacks -fPIC and
+# fails to link into a .so). Shared is also the ROS 2 convention.
+add_library(${PROJECT_NAME} SHARED
   src/palette.cpp
   src/perceptual_palettes.cpp
   src/transfer.cpp
