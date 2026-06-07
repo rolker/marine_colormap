@@ -14,7 +14,9 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <limits>
 
 #include "marine_colormap/colormap.hpp"
@@ -115,4 +117,33 @@ TEST(Colormap, AlphaRampAppliesAcrossRange)
   // Without the ramp, alpha stays opaque.
   TransferParams q;
   EXPECT_NEAR(lookup(0.5f, g, q).a, 1.0f, 1e-5f);
+}
+
+TEST(Colormap, CpuLookupMatchesLutOffGrid)
+{
+  // Stronger than CpuLookupMatchesLut, which only used exact grid points: sweep
+  // values that do NOT land on a LUT index and confirm lookup(v) matches
+  // lut[round(clamp(normalize(v)) * (N-1))] within 1 LSB. Grayscale keeps the
+  // per-index delta tiny so the bound is meaningful; alpha_ramp exercises the
+  // alpha path off-grid too.
+  const auto & g = *find_palette("grayscale");
+  TransferParams p;
+  p.min = 0.0f;
+  p.max = 1.0f;
+  p.alpha_ramp = true;
+  p.alpha_min = 0.0f;
+  p.alpha_max = 1.0f;
+  const std::size_t n = 256;
+  const auto lut = bake_lut(g, p, n);
+  auto close = [](std::uint8_t a, std::uint8_t b) {
+      return std::abs(static_cast<int>(a) - static_cast<int>(b)) <= 1;
+    };
+  for (float v : {0.013f, 0.137f, 0.3017f, 0.5009f, 0.733f, 0.917f}) {
+    const float nrm = std::clamp(marine_colormap::normalize(v, p.min, p.max), 0.0f, 1.0f);
+    const auto idx = static_cast<std::size_t>(std::lround(nrm * static_cast<float>(n - 1)));
+    const Rgba8 a = to_rgba8(lookup(v, g, p));
+    const Rgba8 b = lut[idx];
+    EXPECT_TRUE(close(a.r, b.r) && close(a.g, b.g) && close(a.b, b.b) && close(a.a, b.a))
+      << "v=" << v;
+  }
 }

@@ -58,6 +58,11 @@ inline Rgba lerp(const Rgba & a, const Rgba & b, float t)
 inline Rgba8 to_rgba8(const Rgba & c)
 {
   auto q = [](float v) -> std::uint8_t {
+      // A non-finite channel (NaN/inf from a malformed palette or transfer
+      // param) would make std::lround undefined; map it to 0 deterministically.
+      if (!std::isfinite(v)) {
+        return 0;
+      }
       return static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f));
     };
   return Rgba8{q(c.r), q(c.g), q(c.b), q(c.a)};

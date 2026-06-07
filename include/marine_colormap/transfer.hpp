@@ -56,7 +56,15 @@ struct TransferParams
 /// single function is what guarantees CPU and GPU agree.
 float normalize(float value, float lo, float hi);
 
-/// Apply gain then contrast/gamma to a normalized position, clamped to [0, 1].
+/// Apply gain then contrast/gamma to a normalized position. The exact pipeline,
+/// which a GPU shader MUST replicate verbatim for CPU/GPU agreement, is:
+///   t = clamp01(t);
+///   t = clamp01(t * gain);                       // clamp BEFORE gamma
+///   if (contrast > 0 && contrast != 1) t = pow(t, 1 / contrast);
+///   return clamp01(t);
+/// The clamp of `t * gain` *before* the gamma curve is load-bearing: gain acts as
+/// a clip (values pushed past 1 saturate). `gain < 0` clamps to 0; `contrast <= 0`
+/// is treated as no gamma (passthrough).
 float apply_response(float t, float gain, float contrast);
 
 }  // namespace marine_colormap

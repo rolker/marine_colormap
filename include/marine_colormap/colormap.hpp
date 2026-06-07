@@ -30,7 +30,10 @@ namespace marine_colormap
 /// Stays in floating point until the caller chooses to quantize (no forced 8-bit
 /// input quantization). Order: non-finite -> nodata_color; value < min and
 /// has_below_color -> below_color; otherwise normalize -> gain/contrast ->
-/// palette sample -> alpha. By construction this equals
+/// palette sample -> alpha. The nodata/below sentinels take precedence over the
+/// alpha ramp -- they return their own color and alpha verbatim. The alpha ramp
+/// (when enabled) is a function of the normalized data position, independent of
+/// gain/contrast. By construction the in-range path equals
 /// `bake_lut(...)[round(clamp(normalize(value, min, max)) * (N - 1))]` up to
 /// quantization, so the CPU result and the GPU LUT path agree.
 Rgba lookup(float value, const Palette & pal, const TransferParams & p);

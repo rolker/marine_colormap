@@ -25,6 +25,13 @@ namespace marine_colormap
 Palette::Palette(std::string name, std::vector<ColorStop> stops)
 : name_(std::move(name)), stops_(std::move(stops))
 {
+  // sample() relies on stops being ordered by ascending t (it uses front()/
+  // back() and a forward scan). Sort here so a caller passing unsorted stops
+  // still interpolates correctly. stable_sort keeps equal-t stops in input
+  // order, so a deliberate hard edge (two stops at the same t) is preserved.
+  std::stable_sort(
+    stops_.begin(), stops_.end(),
+    [](const ColorStop & a, const ColorStop & b) {return a.t < b.t;});
 }
 
 Rgba Palette::sample(float t) const

@@ -63,3 +63,17 @@ TEST(Transfer, ResponseContrastGamma)
   EXPECT_FLOAT_EQ(apply_response(0.0f, 1.0f, 2.0f), 0.0f);
   EXPECT_FLOAT_EQ(apply_response(1.0f, 1.0f, 2.0f), 1.0f);
 }
+
+TEST(Transfer, ResponseGainThenGammaClampOrder)
+{
+  // Combined gain != 1 AND contrast != 1: the documented contract is
+  // gamma(clamp(t * gain)). With t*gain still in range, gamma sees the gained
+  // value: 0.25 * 2 = 0.5, pow(0.5, 1/2) = 0.7071.
+  EXPECT_NEAR(apply_response(0.25f, 2.0f, 2.0f), std::pow(0.5f, 0.5f), 1e-5f);
+  // The clamp of t*gain happens BEFORE gamma: 0.75 * 2 = 1.5 -> clamp 1.0 ->
+  // pow(1.0, 1/2) = 1.0. (A shader that gamma'd the un-clamped 1.5 would differ.)
+  EXPECT_FLOAT_EQ(apply_response(0.75f, 2.0f, 2.0f), 1.0f);
+  // Negative gain clamps to 0; non-positive contrast is passthrough (no gamma).
+  EXPECT_FLOAT_EQ(apply_response(0.5f, -1.0f, 2.0f), 0.0f);
+  EXPECT_FLOAT_EQ(apply_response(0.5f, 1.0f, 0.0f), 0.5f);
+}

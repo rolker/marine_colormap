@@ -14,6 +14,8 @@
 
 #include <gtest/gtest.h>
 
+#include <stdexcept>
+
 #include "marine_colormap/palette.hpp"
 
 namespace
@@ -84,4 +86,19 @@ TEST(Palette, SampleClampsOutOfRange)
   const auto & g = *marine_colormap::find_palette("grayscale");
   expect_color(to_rgba8(g.sample(-5.0f)), 0, 0, 0);
   expect_color(to_rgba8(g.sample(5.0f)), 255, 255, 255);
+}
+
+TEST(Palette, ConstructorSortsUnsortedStops)
+{
+  using marine_colormap::ColorStop;
+  using marine_colormap::Palette;
+  using marine_colormap::Rgba;
+  // Stops supplied out of order: red at t=1 before black at t=0. The ctor must
+  // sort them so sample() interpolates black -> red, not the reverse.
+  Palette p("custom", {
+    ColorStop{1.0f, Rgba{1.0f, 0.0f, 0.0f, 1.0f}},
+    ColorStop{0.0f, Rgba{0.0f, 0.0f, 0.0f, 1.0f}}});
+  expect_color(to_rgba8(p.sample(0.0f)), 0, 0, 0);
+  expect_color(to_rgba8(p.sample(1.0f)), 255, 0, 0);
+  expect_color(to_rgba8(p.sample(0.5f)), 128, 0, 0);
 }
