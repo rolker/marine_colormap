@@ -19,7 +19,7 @@ jobs:
     permissions:
       contents: read
     container:
-      image: ros:jazzy-ros-core
+      image: ros:jazzy-ros-base
 
     steps:
       - name: Update apt

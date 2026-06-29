@@ -37,6 +37,18 @@ constexpr float kGrabPixels = 16.0f;  ///< handle hit-test tolerance
 constexpr float kHandleGapFrac = 1e-3f;  ///< min handle gap as a fraction of the domain span
 constexpr int kAxisHeight = 16;  ///< bottom strip reserved for tick labels
 
+/// Local cursor position of a mouse event. `position()` is the Qt6 spelling
+/// (it replaced the now-deprecated `localPos()`); on Qt5, where `position()`
+/// does not yet exist, fall back to `localPos()`. Keeps both toolkits building.
+QPointF eventLocalPos(const QMouseEvent * event)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+  return event->position();
+#else
+  return event->localPos();
+#endif
+}
+
 /// Convert a marine_colormap float color (sRGB, straight alpha) to a QColor.
 QColor toQColor(const marine_colormap::Rgba & c)
 {
@@ -80,16 +92,28 @@ void ColormapLegendWidget::setLut(const std::vector<marine_colormap::Rgba8> & lu
 
 void ColormapLegendWidget::updateAuto(float min, float max)
 {
+  // Capture the resolved state so a no-op (e.g. update_auto() while Manual)
+  // neither repaints nor emits a spurious rangeChanged to consumers.
+  const float prev_lo = model_.lo();
+  const float prev_hi = model_.hi();
+  const auto prev_mode = model_.mode();
   model_.update_auto(min, max);
-  emit rangeChanged(model_.lo(), model_.hi());
-  update();
+  if (model_.lo() != prev_lo || model_.hi() != prev_hi || model_.mode() != prev_mode) {
+    emit rangeChanged(model_.lo(), model_.hi());
+    update();
+  }
 }
 
 void ColormapLegendWidget::reset()
 {
+  const float prev_lo = model_.lo();
+  const float prev_hi = model_.hi();
+  const auto prev_mode = model_.mode();
   model_.reset();
-  emit rangeChanged(model_.lo(), model_.hi());
-  update();
+  if (model_.lo() != prev_lo || model_.hi() != prev_hi || model_.mode() != prev_mode) {
+    emit rangeChanged(model_.lo(), model_.hi());
+    update();
+  }
 }
 
 float ColormapLegendWidget::handleEps() const
@@ -150,6 +174,9 @@ void ColormapLegendWidget::paintEvent(QPaintEvent * event)
         return QColor(c.r, c.g, c.b, c.a);
       }
       const std::size_t count = marine_colormap::palette_count();
+      if (count == 0) {
+        return QColor(0, 0, 0, 0);  // no palette: render transparent rather than UB-clamp
+      }
       const std::size_t idx = static_cast<std::size_t>(
         std::clamp<int>(palette_index_, 0, static_cast<int>(count) - 1));
       return toQColor(marine_colormap::palette(idx).sample(t));
@@ -193,7 +220,7 @@ void ColormapLegendWidget::paintEvent(QPaintEvent * event)
 void ColormapLegendWidget::mousePressEvent(QMouseEvent * event)
 {
   if (event->button() == Qt::LeftButton) {
-    const Handle hit = handleAt(static_cast<float>(event->localPos().x()));
+    const Handle hit = handleAt(static_cast<float>(eventLocalPos(event).x()));
     if (hit != Handle::None) {
       dragging_ = hit;
       event->accept();
@@ -210,7 +237,7 @@ void ColormapLegendWidget::mouseMoveEvent(QMouseEvent * event)
     return;
   }
 
-  const float candidate = xToValue(static_cast<float>(event->localPos().x()));
+  const float candidate = xToValue(static_cast<float>(eventLocalPos(event).x()));
   const float eps = handleEps();
   float lo = model_.lo();
   float hi = model_.hi();

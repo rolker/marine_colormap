@@ -70,7 +70,8 @@ if(BUILD_TESTING)
   ament_add_gtest(test_colormap_legend_widget
     test/test_colormap_legend_widget.cpp
     ENV QT_QPA_PLATFORM=offscreen)
-  target_link_libraries(test_colormap_legend_widget ${PROJECT_NAME} Qt5::Widgets)
+  # Qt5::Widgets is pulled in transitively via ${PROJECT_NAME}'s public link.
+  target_link_libraries(test_colormap_legend_widget ${PROJECT_NAME})
 endif()
 
 ament_package()
