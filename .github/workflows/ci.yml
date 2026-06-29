@@ -1,7 +1,9 @@
-# CI for marine_colormap. See ADR-0004/0005 (enforcement hierarchy) in the
-# workspace repo for the rationale behind the build+test+lint gate. This package
-# has no Qt/Ogre/ROS-message dependencies, so the build needs only ament_cmake +
-# the test tooling pulled by rosdep.
+# CI for marine_colormap (multi-package). See ADR-0004/0005 (enforcement
+# hierarchy) in the workspace repo for the rationale behind the build+test+lint
+# gate. The core `marine_colormap` has no Qt/Ogre/ROS-message dependencies; the
+# `marine_colormap_widgets` package adds a Qt5 widget (ADR-0002), whose Qt dev
+# headers + offscreen platform plugin are pulled by rosdep from its
+# `qtbase5-dev` dependency. Both packages are built and tested below.
 
 name: CI
 
@@ -17,7 +19,7 @@ jobs:
     permissions:
       contents: read
     container:
-      image: ros:jazzy-ros-core
+      image: ros:jazzy-ros-base
 
     steps:
       - name: Update apt
@@ -51,7 +53,7 @@ jobs:
         working-directory: ../ws
         run: >
           bash -c 'source /opt/ros/jazzy/setup.bash &&
-          colcon build --packages-up-to marine_colormap
+          colcon build --packages-up-to marine_colormap_widgets
           --cmake-args -DBUILD_TESTING=ON'
 
       - name: Test
@@ -59,7 +61,7 @@ jobs:
         run: >
           bash -c 'source /opt/ros/jazzy/setup.bash &&
           source install/setup.bash &&
-          colcon test --packages-select marine_colormap
+          colcon test --packages-select marine_colormap marine_colormap_widgets
           --event-handlers console_direct+
           --return-code-on-test-failure'
 

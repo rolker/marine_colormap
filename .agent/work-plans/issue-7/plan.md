@@ -1,4 +1,4 @@
-# Plan: Colormap range model + colorbar legend widget — Part 1 (range model, Qt-free core)
+# Plan: Colormap range model + colorbar legend widget (Part 2 — widget)
 
 ## Issue
 
@@ -6,91 +6,110 @@ https://github.com/rolker/marine_colormap/issues/7
 
 ## Context
 
-`marine_colormap` has `TransferParams::min`/`max` as plain floats — no concept of
-auto (data-driven) vs. manual (operator-fixed) range. Outliers (e.g. backscatter
-band 2: max 925, mean 0.16, stddev 6.2) collapse all structure when auto-range
-maps to [0, 925]. This Part-1 PR adds a Qt-free `RangeModel` to the core and a
-"quality/warning" palette; Part 2 (separate run, separate PR) adds the interactive
-`marine_colormap_widgets` package with the Qt colorbar widget.
+Part 1 (merged, PR #8) added `RangeModel` + `quality` palette to the Qt-free
+core. Part 2 adds the interactive colorbar legend widget in a **new
+`marine_colormap_widgets` ROS 2 package**, completing #7. The repo becomes
+multi-package; CI (`build-and-test`) must build and test both packages.
 
-Existing palettes: grayscale, bronze, thermal, viridis, turbo. No quality/warning
-ramp today.
+Core API available: `RangeModel{Auto/Manual, update_auto, set_manual, reset,
+lo()/hi()/mode(), normalize()}`. Handles MUST clamp (cannot cross); inverted
+drag is prevented at the widget, not reversed — the model's `lo <= hi`
+invariant (ADR-0001) is enforced at the UI layer.
 
 ## Approach
 
-1. **Add `RangeModel` to `transfer.hpp`/`transfer.cpp`** — Augments (does not replace
-   or wrap) `TransferParams`. `RangeModel` tracks `RangeMode::{Auto, Manual}` and
-   resolves to `(lo, hi)` that callers place into `TransferParams::min/max` (or GPU
-   uniforms `u_min`/`u_max`). In `Auto` mode, `update_auto(float, float)` tracks
-   data-driven range. In `Manual` mode, `set_manual(float, float)` fixes it;
-   `reset()` returns to Auto. Exposes `lo()`, `hi()`, `mode()`, and a convenience
-   `normalize(float)` that delegates to `::normalize(value, lo(), hi())`. No change
-   to `TransferParams` fields; consumers update `params.min/max` from the model.
+1. **ADR-0002: widget design** — write `docs/decisions/0002-colorbar-widget.md`
+   covering: widget API (owns `RangeModel` vs. takes reference), Qt
+   package-vs-target decision (separate package, not a Qt target in core),
+   handle-clamp policy, `rangeChanged` signal contract, and reset-to-auto
+   behaviour. Commit with the package skeleton (step 2).
 
-2. **Add `quality` palette to `src/palette.cpp`** — `even("quality", {green, yellow,
-   red})` for the uncertainty/warning use case (t=0=good/green, t=1=bad/red). Appended
-   at index 5 per the append-only, name-keyed registry contract.
+2. **New `marine_colormap_widgets` package skeleton** — create
+   `marine_colormap_widgets/package.xml` (ament_cmake, depends on
+   `marine_colormap` + `Qt5Widgets`) and `marine_colormap_widgets/CMakeLists.txt`
+   (find Qt5, ament targets, install, test scaffold). Commit together with ADR.
 
-3. **Write `docs/decisions/0001-range-model.md`** — New ADR for the `RangeModel` API
-   decision (Auto/Manual model, relationship to `TransferParams`, widget tier deferred
-   to Part 2). This is marine_colormap's first own ADR; creates `docs/decisions/`.
+3. **`ColormapLegendWidget` header** —
+   `marine_colormap_widgets/include/marine_colormap_widgets/colormap_legend_widget.hpp`:
+   `class ColormapLegendWidget : public QWidget` with
+   `Q_OBJECT`; internal `RangeModel`; `setPalette(int index)`, `setLut(...)`,
+   `lo()/hi()/mode()`, `reset()` public API; `rangeChanged(float lo, float hi)`
+   signal; `paintEvent`, `mousePressEvent`, `mouseMoveEvent`,
+   `mouseReleaseEvent` overrides. No public `RangeModel*` reference — widget
+   owns the model (simplest contract; consumers read `lo()/hi()` and the
+   signal).
 
-4. **Update `test/test_transfer.cpp`** — Add tests: auto↔manual mode switch, clamp
-   behavior when `Manual` range is exceeded, `normalize()` consistency, degenerate range,
-   `reset()` returns to `Auto`.
+4. **`ColormapLegendWidget` implementation** —
+   `marine_colormap_widgets/src/colormap_legend_widget.cpp`:
+   - `paintEvent`: QPainter fills the colormap ramp (sample LUT or palette across
+     widget width), draws the value axis with tick marks, draws draggable handle
+     markers at `lo()` and `hi()` positions.
+   - Mouse press: hit-test which handle (lo or hi) is under cursor; begin drag.
+   - Mouse move during drag: compute candidate new value from x position; clamp
+     so lo handle cannot exceed `hi() - epsilon` and hi handle cannot go below
+     `lo() + epsilon`; call `model_.set_manual(new_lo, new_hi)`; emit
+     `rangeChanged`; `update()`.
+   - Double-click on widget background (not a handle): call `model_.reset()`;
+     emit `rangeChanged`; `update()`. (Or expose a `reset()` slot — plan for
+     both, implement slot for testability.)
+   - `reset()` public slot: same as double-click path.
 
-5. **Update `test/test_palette.cpp`** — Verify `quality` is in the registry at the
-   expected name; sample at t=0 is greenish, t=1 is reddish.
+5. **Tests** — `marine_colormap_widgets/test/test_colormap_legend_widget.cpp`
+   using `ament_cmake_gtest` + `QApplication` with `QT_QPA_PLATFORM=offscreen`:
+   - *drag → Manual + signal*: simulate `mousePressEvent` on lo-handle pixel,
+     `mouseMoveEvent` to a new x, `mouseReleaseEvent`; verify `mode() == Manual`,
+     `rangeChanged` emitted with the expected values, and handles didn't cross.
+   - *reset → Auto*: call `widget.reset()`; verify `mode() == Auto`.
+   - *clamp prevents crossing*: drag lo handle past hi; verify `lo() < hi()`.
 
-6. **Update `README.md`** — Add `RangeModel` to the API section and note the `quality`
-   palette; update palette list.
+6. **CI multi-package verification** — confirm `build-and-test` workflow
+   handles both packages (colcon discovers them automatically in the workspace;
+   no CI file changes expected, but verify workflow file covers the new package
+   before merging).
 
 ## Files to Change
 
 | File | Change |
 |------|--------|
-| `include/marine_colormap/transfer.hpp` | Add `RangeMode` enum and `RangeModel` class |
-| `src/transfer.cpp` | Implement `RangeModel` |
-| `src/palette.cpp` | Append `quality` palette at index 5 |
-| `test/test_transfer.cpp` | Range model unit tests |
-| `test/test_palette.cpp` | Quality palette registry test |
-| `README.md` | Document `RangeModel` and `quality` palette |
-| `docs/decisions/0001-range-model.md` | New ADR (creates `docs/decisions/`) |
+| `docs/decisions/0002-colorbar-widget.md` | New ADR: widget design, Qt-package structure, clamp policy, signal contract |
+| `marine_colormap_widgets/package.xml` | New package: ament_cmake, depends on marine_colormap + Qt5Widgets |
+| `marine_colormap_widgets/CMakeLists.txt` | New: find Qt5, widget shared lib, install, gtest scaffold |
+| `marine_colormap_widgets/include/marine_colormap_widgets/colormap_legend_widget.hpp` | New: `ColormapLegendWidget` header |
+| `marine_colormap_widgets/src/colormap_legend_widget.cpp` | New: widget implementation |
+| `marine_colormap_widgets/test/test_colormap_legend_widget.cpp` | New: offscreen-Qt drag + reset + clamp tests |
 
 ## Principles Self-Check
 
 | Principle | Consideration |
 |---|---|
-| Only what's needed | `RangeModel` is minimal — augments TransferParams, no new deps. Quality palette is one entry. No widget in Part 1. |
-| A change includes its consequences | Tests, README, and ADR updated in the same PR; Part-2 widget consumer noted as follow-on |
-| Capture decisions, not just implementations | ADR-0001 in `docs/decisions/` records the Auto/Manual API design rationale |
-| Test what breaks | Range model tests cover the auto↔manual boundary and clamp behavior — the cases field use depends on |
-| Improve incrementally | Staged into two PRs: range model first (this), then widget (Part 2) |
+| Human control and transparency | Draggable handles + reset-to-auto give operator explicit control; `rangeChanged` signal makes state visible to consumers |
+| Capture decisions, not just implementations | ADR-0002 records widget API, package structure, clamp policy, and signal contract before implementation |
+| A change includes its consequences | Tests included in same PR; CI multi-package build confirmed before merge |
+| Only what's needed | Widget owns model (no bridge object); no consumer wiring in this PR (camp#142, rqt_marine_sonar deferred explicitly) |
+| Test what breaks | Three tests cover the three risky interactions: drag→Manual, reset→Auto, clamp-prevents-crossing |
+| Workspace vs. project separation | New package is in the `marine_colormap` project repo, not the workspace |
 
 ## ADR Compliance
 
 | ADR | Triggered | How addressed |
 |---|---|---|
-| Workspace ADR-0001 (adopt ADRs) | Yes — new API decision | New `docs/decisions/0001-range-model.md` captures the range model design |
-| Project ADR-0001 (shared colormap) | Yes — new capability in Tier 1 | `RangeModel` is Qt-free, consistent with the Tier 1 contract; ADR-0001 addendum cross-ref will be added from `unh_marine_autonomy` in a follow-on |
-| ADR-0008 (ROS 2 conventions) | Yes — modifying a ROS 2 package | No new deps introduced; ament export stays clean (no Qt/Ogre leak) |
+| ADR-0001 (marine_colormap — range model) | Yes — widget must enforce `lo <= hi` | Clamp at widget; inverted drag prevented, not reversed (per ADR-0001 § Inverted range) |
+| Workspace ADR-0001 (adopt ADRs) | Yes — widget design is a new decision | Write ADR-0002 as part of this PR |
+| ADR-0008 (ROS 2 conventions) | Yes — new ROS 2 package | `package.xml` format 3, `ament_cmake`, proper deps, Apache-2.0 headers |
 
 ## Consequences
 
 | If we change... | Also update... | Included in plan? |
 |---|---|---|
-| `TransferParams` shape | GPU consumers re-bake (no shape change here) | N/A — TransferParams unchanged |
-| Palette registry index | Consumers persisting by index silently remap | README note; palette.hpp append-only contract holds (new palette appends at 5) |
-| `normalize()` signature | GPU shader mirrors it | Not changed; RangeModel delegates to existing `normalize()` |
+| Add `marine_colormap_widgets` package | CI must build/test both packages | Yes — step 6 verifies before merge |
+| Widget `rangeChanged` signal contract | Consumer wiring (camp#142, rqt_marine_sonar, rviz_sonar_image) | No — deferred, documented in ADR-0002 Consequences |
+| Handle-clamp policy | ADR-0001 back-reference | Yes — ADR-0002 cites ADR-0001 § Inverted range |
 
 ## Open Questions
 
-- Should `RangeModel` expose a `clamp(float value) const` helper for the uncertainty
-  overlay sentinel case (values beyond manual range → clamp to LUT end), or is that
-  handled implicitly by the existing `normalize()` raw-value contract + GPU clamp?
-  (Existing `normalize()` already returns raw <0 or >1; callers handle clamping. If no
-  explicit `clamp()` is needed, remove this question after implementation.)
+- [ ] Qt version: Qt5 or Qt6? (Jazzy ships Qt5; confirm CI container has Qt5Widgets dev headers; if Qt6 available, plan for both via CMake Qt-version compat.) Assume Qt5 unless CI environment says otherwise.
+- [ ] Reset trigger UX: double-click on widget background vs. separate reset button? Plan implements a `reset()` slot testable without mouse simulation; the UX trigger is a separate UI detail the consumer can wire.
 
 ## Estimated Scope
 
-Two PRs total for #7: this PR (Part 1 — range model, Qt-free core) + Part 2 (marine_colormap_widgets + interactive colorbar widget, separate run). This PR is "Part of #7" — does NOT close #7.
+Single PR (completes #7). Two commits minimum: (1) ADR + package skeleton, (2) widget implementation + tests. CI must go green before merge.
