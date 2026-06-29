@@ -76,6 +76,11 @@ Public surface (`marine_colormap_widgets/colormap_legend_widget.hpp`):
 - `updateAuto(float min, float max)` — feed data extents to the owned model
   (a no-op while Manual, per `RangeModel`); the only way to drive Auto mode from
   outside, since the model is not exposed.
+- `setManual(float lo, float hi)` **slot** — `RangeModel::set_manual()` (→ Manual,
+  ordered `lo <= hi`) + `rangeChanged` + repaint, the symmetric counterpart to
+  `updateAuto`/`reset` for seeding the widget on a persisted/external override
+  (a consumer reopening its colorbar on a previously-pinned range). Without it the
+  only path to Manual is a mouse drag, so an existing override could not be shown.
 - `lo()`, `hi()`, `mode()` — read-through getters.
 - `reset()` **slot** — `RangeModel::reset()` (→ Auto) + `rangeChanged` + repaint.
 - `rangeChanged(float lo, float hi)` **signal**.

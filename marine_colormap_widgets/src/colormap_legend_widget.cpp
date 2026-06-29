@@ -104,6 +104,21 @@ void ColormapLegendWidget::updateAuto(float min, float max)
   }
 }
 
+void ColormapLegendWidget::setManual(float lo, float hi)
+{
+  // Same guard as updateAuto()/reset(): only emit + repaint when the resolved
+  // state actually moves (set_manual orders lo <= hi via std::minmax, so a
+  // re-seed of the current Manual window is a no-op).
+  const float prev_lo = model_.lo();
+  const float prev_hi = model_.hi();
+  const auto prev_mode = model_.mode();
+  model_.set_manual(lo, hi);
+  if (model_.lo() != prev_lo || model_.hi() != prev_hi || model_.mode() != prev_mode) {
+    emit rangeChanged(model_.lo(), model_.hi());
+    update();
+  }
+}
+
 void ColormapLegendWidget::reset()
 {
   const float prev_lo = model_.lo();

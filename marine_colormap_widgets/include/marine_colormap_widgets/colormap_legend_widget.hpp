@@ -69,6 +69,14 @@ public slots:
   /// `rangeChanged` and repaints.
   void updateAuto(float min, float max);
 
+  /// Seed the owned model into a `Manual` window, e.g. to display a persisted or
+  /// externally-held operator override when the widget opens. Inputs are ordered
+  /// so `lo <= hi` (per ADR-0001 / `RangeModel::set_manual`, which clamps an
+  /// inverted pair rather than reversing). Emits `rangeChanged(lo(), hi())` and
+  /// repaints only when the resolved state changes. Does not move the domain;
+  /// call `setDomain()` first if the override may fall outside it.
+  void setManual(float lo, float hi);
+
   /// Return the model to `Auto` (extent left as-is until the next `updateAuto`).
   /// Emits `rangeChanged(lo(), hi())` and repaints.
   void reset();
