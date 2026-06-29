@@ -52,6 +52,7 @@ TEST(Palette, RegistryIsAppendOnlyAndNameKeyed)
   EXPECT_EQ(marine_colormap::palette_index("thermal").value(), 2u);
   EXPECT_EQ(marine_colormap::palette_index("viridis").value(), 3u);
   EXPECT_EQ(marine_colormap::palette_index("turbo").value(), 4u);
+  EXPECT_EQ(marine_colormap::palette_index("quality").value(), 5u);
   EXPECT_FALSE(marine_colormap::palette_index("plasma").has_value());
 }
 
@@ -97,6 +98,28 @@ TEST(Palette, BronzeGoldenEndpoints)
   const auto & b = *marine_colormap::find_palette("bronze");
   expect_color(to_rgba8(b.sample(0.0f)), 0, 0, 0);
   expect_color(to_rgba8(b.sample(1.0f)), 255, 225, 170);
+}
+
+TEST(Palette, QualityWarningRamp)
+{
+  // Bathy-uncertainty warning ramp (issue #7): green (good) -> yellow (caution)
+  // -> red (bad). Assert the dominant channel at each anchor rather than exact
+  // RGB so the ramp's hue intent is locked without pinning tweakable values.
+  const auto * q = marine_colormap::find_palette("quality");
+  ASSERT_NE(q, nullptr);
+
+  const Rgba8 good = to_rgba8(q->sample(0.0f));
+  EXPECT_GT(static_cast<int>(good.g), static_cast<int>(good.r));  // greenish
+  EXPECT_GT(static_cast<int>(good.g), static_cast<int>(good.b));
+
+  const Rgba8 caution = to_rgba8(q->sample(0.5f));
+  EXPECT_GT(static_cast<int>(caution.r), 150);  // yellowish: high R and G,
+  EXPECT_GT(static_cast<int>(caution.g), 150);  // low B
+  EXPECT_LT(static_cast<int>(caution.b), 100);
+
+  const Rgba8 bad = to_rgba8(q->sample(1.0f));
+  EXPECT_GT(static_cast<int>(bad.r), static_cast<int>(bad.g));  // reddish
+  EXPECT_GT(static_cast<int>(bad.r), static_cast<int>(bad.b));
 }
 
 TEST(Palette, SampleClampsOutOfRange)
