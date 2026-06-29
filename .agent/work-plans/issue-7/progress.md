@@ -122,3 +122,24 @@ colorbar widget) is a separate run / separate PR and still leaves #7 open.
 - [ ] (suggestion) Setters accept inverted range (`lo > hi`) silently; `normalize()` then maps all values to 0 (cross-pass confirmed Lens A+B) — `src/transfer.cpp:41,50`
 - [ ] (suggestion) No test asserts `reset()` preserves the prior extent until the next `update_auto()` — `test/test_transfer.cpp` / `src/transfer.cpp:57`
 - [ ] (suggestion) ADR status is `Proposed` though it merges with its implementation; consider `Accepted` — `docs/decisions/0001-range-model.md:5`
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-06-29 07:30 +00:00
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+**Verdict**: approved
+
+**Branch**: feature/issue-7 at `f009945`
+**Mode**: pre-push
+**Depth**: Deep (reason: new ADR `docs/decisions/0001-range-model.md` is a Deep promotion trigger)
+**Must-fix**: 0 | **Suggestions**: 1
+**Round**: 2 | **Ship**: recommended — no Must-fix; all three Round-1 suggestions resolved (commits 55cb21a, f009945); lone remaining item is optional NaN-hardening
+
+### Findings
+- [ ] (suggestion) `update_auto()`/`set_manual()` don't guard NaN/inf; behavior is safe (degenerate guard returns 0, no UB) but untested/undocumented — add a doc note or lock-in test — `src/transfer.cpp:42,52`
+
+<!-- Round-1 suggestions verified resolved this round:
+     inverted-range guard (std::minmax + tests), reset-preserves-extent test,
+     ADR status Proposed->Accepted. ament_cpplint clean; cppcheck only
+     pre-existing style notes on untouched lines. Lens B clean. -->
+
