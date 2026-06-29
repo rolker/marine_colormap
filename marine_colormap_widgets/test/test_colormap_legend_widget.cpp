@@ -139,3 +139,50 @@ TEST(ColormapLegendWidget, DragPastCrossingIsClamped)
   EXPECT_LT(w.lo(), w.hi());                 // clamp kept lo strictly below hi
   EXPECT_GT(w.lo(), 90.0f);                  // lo was pushed up near hi (hi - eps)
 }
+
+// setManual() seeds the model into a Manual window from outside (no drag), as a
+// consumer would when opening the widget on a persisted override. Orders an
+// inverted pair (lo <= hi) and emits rangeChanged once on a real change.
+TEST(ColormapLegendWidget, SetManualSeedsManualWindow)
+{
+  ColormapLegendWidget w;
+  w.resize(200, 40);
+  w.setDomain(0.0f, 100.0f);
+  w.updateAuto(0.0f, 100.0f);
+  ASSERT_EQ(w.mode(), RangeMode::Auto);
+
+  int emissions = 0;
+  float last_lo = -1.0f;
+  float last_hi = -1.0f;
+  QObject::connect(
+    &w, &ColormapLegendWidget::rangeChanged,
+    [&](float lo, float hi) {++emissions; last_lo = lo; last_hi = hi;});
+
+  w.setManual(20.0f, 80.0f);
+
+  EXPECT_EQ(w.mode(), RangeMode::Manual);
+  EXPECT_FLOAT_EQ(w.lo(), 20.0f);
+  EXPECT_FLOAT_EQ(w.hi(), 80.0f);
+  EXPECT_EQ(emissions, 1);
+  EXPECT_FLOAT_EQ(last_lo, 20.0f);
+  EXPECT_FLOAT_EQ(last_hi, 80.0f);
+
+  // Re-seeding the same window resolves identically -> no spurious emission.
+  w.setManual(20.0f, 80.0f);
+  EXPECT_EQ(emissions, 1);
+}
+
+// setManual() orders an inverted pair to lo <= hi (ADR-0001: clamped, not
+// reversed), matching RangeModel::set_manual / the drag clamp.
+TEST(ColormapLegendWidget, SetManualOrdersInvertedInput)
+{
+  ColormapLegendWidget w;
+  w.resize(200, 40);
+  w.setDomain(0.0f, 100.0f);
+
+  w.setManual(80.0f, 20.0f);   // hi, lo passed in the wrong order
+
+  EXPECT_EQ(w.mode(), RangeMode::Manual);
+  EXPECT_FLOAT_EQ(w.lo(), 20.0f);
+  EXPECT_FLOAT_EQ(w.hi(), 80.0f);
+}
