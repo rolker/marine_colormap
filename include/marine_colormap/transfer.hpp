@@ -99,12 +99,20 @@ public:
   /// the clamp that keeps an outlier from re-widening the operator's choice).
   /// An inverted `[min, max]` is normalized (swapped to `min <= max`) so the
   /// resulting range stays usable rather than collapsing to the degenerate case.
+  /// NaN/inf inputs are **not** special-cased: a NaN bound makes every
+  /// subsequent `normalize()` return 0 via the degenerate-range guard
+  /// (`!(hi > lo)` is always true when a bound is NaN); infinite bounds produce
+  /// a defined, no-UB result. Safe by construction — no NaN rejection is done.
   void update_auto(float min, float max);
 
   /// Pin the range to `[lo, hi]` and switch to `Manual` mode. An inverted
   /// `[lo, hi]` is swapped so `lo() <= hi()` (an operator dragging the handles
   /// past each other shouldn't break rendering); a zero-width `lo == hi` is
   /// left as-is and handled by `normalize()`'s degenerate-range guard.
+  /// NaN/inf inputs are **not** special-cased: a NaN bound makes every
+  /// subsequent `normalize()` return 0 via the degenerate-range guard;
+  /// infinite bounds produce a defined, no-UB result. Safe by construction —
+  /// no NaN rejection is done.
   void set_manual(float lo, float hi);
 
   /// Return to `Auto` mode. The extent is left as-is until the next

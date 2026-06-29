@@ -46,6 +46,8 @@ void RangeModel::update_auto(float min, float max)
   }
   // Normalize the order so an inverted [min, max] still yields a usable range
   // instead of collapsing every sample to 0 via the degenerate-range guard.
+  // NaN/inf are not special-cased: a NaN bound falls through to normalize()'s
+  // degenerate guard (returns 0); inf bounds give a defined, no-UB result.
   std::tie(lo_, hi_) = std::minmax(min, max);
 }
 
@@ -53,6 +55,8 @@ void RangeModel::set_manual(float lo, float hi)
 {
   // Swap an inverted range rather than rejecting it: an operator dragging the
   // low/high handles past each other should still render correctly.
+  // NaN/inf are not special-cased: a NaN bound falls through to normalize()'s
+  // degenerate guard (returns 0); inf bounds give a defined, no-UB result.
   std::tie(lo_, hi_) = std::minmax(lo, hi);
   mode_ = RangeMode::Manual;
 }

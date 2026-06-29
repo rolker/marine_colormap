@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <limits>
 
 #include "marine_colormap/transfer.hpp"
 
@@ -191,4 +192,48 @@ TEST(RangeModel, AutoSwapsInvertedDataExtents)
   rm.update_auto(10.0f, -50.0f);  // inverted
   EXPECT_FLOAT_EQ(rm.lo(), -50.0f);
   EXPECT_FLOAT_EQ(rm.hi(), 10.0f);
+}
+
+TEST(RangeModel, NaNBoundsAreNotSpecialCasedButStayWellDefined)
+{
+  // Lock-in: NaN bounds are neither rejected nor sanitized. They flow through
+  // minmax() into (lo_, hi_); the subsequent normalize() degenerate-range
+  // guard (`!(hi > lo)`, always true when either bound is NaN) returns 0. No
+  // crash / UB -- just the documented safe fallback. This pins the current
+  // behavior so any future change to NaN handling is a deliberate decision.
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+
+  RangeModel manual;
+  manual.set_manual(nan, 1.0f);  // NaN low bound
+  EXPECT_EQ(manual.mode(), RangeMode::Manual);
+  EXPECT_FLOAT_EQ(manual.normalize(0.5f), 0.0f);
+  EXPECT_FLOAT_EQ(manual.normalize(nan), 0.0f);  // NaN value, too -> still 0
+
+  manual.set_manual(0.0f, nan);  // NaN high bound
+  EXPECT_FLOAT_EQ(manual.normalize(0.5f), 0.0f);
+
+  RangeModel auto_rm;  // defaults to Auto
+  auto_rm.update_auto(nan, 0.0f);
+  EXPECT_FLOAT_EQ(auto_rm.normalize(0.5f), 0.0f);
+  auto_rm.update_auto(0.0f, nan);
+  EXPECT_FLOAT_EQ(auto_rm.normalize(0.5f), 0.0f);
+}
+
+TEST(RangeModel, InfiniteBoundsStayWellDefinedNoUB)
+{
+  // Lock-in: infinite bounds are likewise not special-cased and never cause UB.
+  // The exact (defined) outcome differs by side, so assert what the code does:
+  const float inf = std::numeric_limits<float>::infinity();
+
+  RangeModel hi_inf;
+  hi_inf.set_manual(0.0f, inf);  // lo=0, hi=+inf (minmax keeps order)
+  // finite / inf == 0: a +inf upper bound flattens every finite sample to 0.
+  EXPECT_FLOAT_EQ(hi_inf.normalize(0.5f), 0.0f);
+  EXPECT_FLOAT_EQ(hi_inf.normalize(0.0f), 0.0f);
+
+  RangeModel lo_inf;
+  lo_inf.set_manual(-inf, 0.0f);  // lo=-inf, hi=0
+  // (v + inf) / (inf) is indeterminate -> NaN. Defined (no UB), not finite;
+  // pinned so the indeterminate-form edge is documented, not silently relied on.
+  EXPECT_TRUE(std::isnan(lo_inf.normalize(0.5f)));
 }
