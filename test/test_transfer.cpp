@@ -15,11 +15,14 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <limits>
 
 #include "marine_colormap/transfer.hpp"
 
 using marine_colormap::apply_response;
 using marine_colormap::normalize;
+using marine_colormap::RangeMode;
+using marine_colormap::RangeModel;
 
 TEST(Transfer, NormalizeMapsRange)
 {
@@ -76,4 +79,161 @@ TEST(Transfer, ResponseGainThenGammaClampOrder)
   // Negative gain clamps to 0; non-positive contrast is passthrough (no gamma).
   EXPECT_FLOAT_EQ(apply_response(0.5f, -1.0f, 2.0f), 0.0f);
   EXPECT_FLOAT_EQ(apply_response(0.5f, 1.0f, 0.0f), 0.5f);
+}
+
+TEST(RangeModel, DefaultsToAutoUnitRange)
+{
+  RangeModel rm;
+  EXPECT_EQ(rm.mode(), RangeMode::Auto);
+  EXPECT_FLOAT_EQ(rm.lo(), 0.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 1.0f);
+}
+
+TEST(RangeModel, AutoTracksDataExtents)
+{
+  RangeModel rm;
+  rm.update_auto(-70.0f, 0.0f);  // dB-style frame
+  EXPECT_EQ(rm.mode(), RangeMode::Auto);
+  EXPECT_FLOAT_EQ(rm.lo(), -70.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 0.0f);
+  // A later frame replaces the extent (range follows the data).
+  rm.update_auto(-50.0f, 10.0f);
+  EXPECT_FLOAT_EQ(rm.lo(), -50.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 10.0f);
+}
+
+TEST(RangeModel, SetManualSwitchesModeAndPins)
+{
+  RangeModel rm;
+  rm.set_manual(0.0f, 1.0f);
+  EXPECT_EQ(rm.mode(), RangeMode::Manual);
+  EXPECT_FLOAT_EQ(rm.lo(), 0.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 1.0f);
+}
+
+TEST(RangeModel, ManualIgnoresDataExceedingRange)
+{
+  // The #7 case: an outlier band (max 925) must not re-widen an operator's
+  // pinned [0, 1]. update_auto() is a no-op while Manual.
+  RangeModel rm;
+  rm.set_manual(0.0f, 1.0f);
+  rm.update_auto(0.16f, 925.0f);
+  EXPECT_EQ(rm.mode(), RangeMode::Manual);
+  EXPECT_FLOAT_EQ(rm.lo(), 0.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 1.0f);
+  // A value past the pinned range still normalizes raw > 1 (caller clamps).
+  EXPECT_GT(rm.normalize(925.0f), 1.0f);
+}
+
+TEST(RangeModel, NormalizeMatchesFreeFunction)
+{
+  RangeModel rm;
+  rm.set_manual(-70.0f, 0.0f);
+  for (float v : {-70.0f, -35.0f, 0.0f, 10.0f}) {
+    EXPECT_FLOAT_EQ(rm.normalize(v), normalize(v, rm.lo(), rm.hi()));
+  }
+}
+
+TEST(RangeModel, DegenerateRangeNormalizesToZero)
+{
+  RangeModel rm;
+  rm.set_manual(5.0f, 5.0f);  // zero-width
+  EXPECT_FLOAT_EQ(rm.normalize(5.0f), 0.0f);
+  EXPECT_FLOAT_EQ(rm.normalize(99.0f), 0.0f);
+}
+
+TEST(RangeModel, ResetReturnsToAutoAndResumesTracking)
+{
+  RangeModel rm;
+  rm.set_manual(0.0f, 1.0f);
+  ASSERT_EQ(rm.mode(), RangeMode::Manual);
+  rm.reset();
+  EXPECT_EQ(rm.mode(), RangeMode::Auto);
+  // Tracking resumes: a no-op while Manual now takes effect.
+  rm.update_auto(-20.0f, 5.0f);
+  EXPECT_FLOAT_EQ(rm.lo(), -20.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 5.0f);
+}
+
+TEST(RangeModel, ResetPreservesExtentUntilNextUpdate)
+{
+  // reset() returns to Auto but must NOT zero the range: lo()/hi() keep the
+  // prior extent until the next update_auto() refreshes it from data.
+  RangeModel rm;
+  rm.set_manual(-70.0f, 0.0f);
+  rm.reset();
+  EXPECT_EQ(rm.mode(), RangeMode::Auto);
+  EXPECT_FLOAT_EQ(rm.lo(), -70.0f);  // extent preserved, not reset to defaults
+  EXPECT_FLOAT_EQ(rm.hi(), 0.0f);
+  // Normalization still uses the preserved extent.
+  EXPECT_FLOAT_EQ(rm.normalize(-35.0f), 0.5f);
+}
+
+TEST(RangeModel, SetManualSwapsInvertedRange)
+{
+  // An inverted range (hi, lo) must be swapped, not silently collapse every
+  // sample to 0 via the degenerate-range guard. set_manual(1, 0) == [0, 1].
+  RangeModel rm;
+  rm.set_manual(1.0f, 0.0f);  // inverted
+  EXPECT_FLOAT_EQ(rm.lo(), 0.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 1.0f);
+  EXPECT_FLOAT_EQ(rm.normalize(0.25f), 0.25f);  // correct, not all-zero
+  // dB-style inverted drag normalizes the same as the forward range.
+  rm.set_manual(0.0f, -70.0f);  // inverted
+  EXPECT_FLOAT_EQ(rm.lo(), -70.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 0.0f);
+  EXPECT_FLOAT_EQ(rm.normalize(-35.0f), 0.5f);
+}
+
+TEST(RangeModel, AutoSwapsInvertedDataExtents)
+{
+  // update_auto() likewise normalizes an inverted [min, max].
+  RangeModel rm;
+  rm.update_auto(10.0f, -50.0f);  // inverted
+  EXPECT_FLOAT_EQ(rm.lo(), -50.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 10.0f);
+}
+
+TEST(RangeModel, NaNBoundsAreNotSpecialCasedButStayWellDefined)
+{
+  // Lock-in: NaN bounds are neither rejected nor sanitized. They flow through
+  // minmax() into (lo_, hi_); the subsequent normalize() degenerate-range
+  // guard (`!(hi > lo)`, always true when either bound is NaN) returns 0. No
+  // crash / UB -- just the documented safe fallback. This pins the current
+  // behavior so any future change to NaN handling is a deliberate decision.
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+
+  RangeModel manual;
+  manual.set_manual(nan, 1.0f);  // NaN low bound
+  EXPECT_EQ(manual.mode(), RangeMode::Manual);
+  EXPECT_FLOAT_EQ(manual.normalize(0.5f), 0.0f);
+  EXPECT_FLOAT_EQ(manual.normalize(nan), 0.0f);  // NaN value, too -> still 0
+
+  manual.set_manual(0.0f, nan);  // NaN high bound
+  EXPECT_FLOAT_EQ(manual.normalize(0.5f), 0.0f);
+
+  RangeModel auto_rm;  // defaults to Auto
+  auto_rm.update_auto(nan, 0.0f);
+  EXPECT_FLOAT_EQ(auto_rm.normalize(0.5f), 0.0f);
+  auto_rm.update_auto(0.0f, nan);
+  EXPECT_FLOAT_EQ(auto_rm.normalize(0.5f), 0.0f);
+}
+
+TEST(RangeModel, InfiniteBoundsStayWellDefinedNoUB)
+{
+  // Lock-in: infinite bounds are likewise not special-cased and never cause UB.
+  // The exact (defined) outcome differs by side, so assert what the code does:
+  const float inf = std::numeric_limits<float>::infinity();
+
+  RangeModel hi_inf;
+  hi_inf.set_manual(0.0f, inf);  // lo=0, hi=+inf (minmax keeps order)
+  // finite / inf == 0: a +inf upper bound flattens every finite sample to 0.
+  EXPECT_FLOAT_EQ(hi_inf.normalize(0.5f), 0.0f);
+  EXPECT_FLOAT_EQ(hi_inf.normalize(0.0f), 0.0f);
+
+  RangeModel lo_inf;
+  lo_inf.set_manual(-inf, 0.0f);  // lo=-inf, hi=0
+  // (v + inf) / (inf) is indeterminate -> NaN. Defined (no UB), not finite;
+  // pinned so the indeterminate-form edge is documented, not silently relied on.
+  EXPECT_TRUE(std::isnan(lo_inf.normalize(0.5f)));
 }

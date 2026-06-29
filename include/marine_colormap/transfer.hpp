@@ -67,6 +67,73 @@ float normalize(float value, float lo, float hi);
 /// is treated as no gamma (passthrough).
 float apply_response(float t, float gain, float contrast);
 
+/// How a `RangeModel` decides its `(lo, hi)` extent.
+enum class RangeMode
+{
+  Auto,    ///< Range follows the data extents fed via `update_auto()`.
+  Manual,  ///< Range is fixed by the operator via `set_manual()`.
+};
+
+/// Data-driven vs. operator-fixed range, the missing piece above
+/// `TransferParams` (ADR-0001 of this package). `TransferParams::min`/`max`
+/// are plain floats with no notion of *where* they came from; `RangeModel`
+/// owns that distinction and resolves to a `(lo, hi)` extent that callers copy
+/// into `params.min`/`max` (or the GPU `u_min`/`u_max` uniforms). It does NOT
+/// wrap or replace `TransferParams` — it sits beside it.
+///
+/// In `Auto` mode the range tracks the latest data extents (so structure is
+/// not collapsed by a stale wide range); in `Manual` mode it is pinned, which
+/// is what lets an operator tame an outlier band (e.g. backscatter max 925,
+/// mean 0.16) that would otherwise flatten all detail under auto-range.
+///
+/// `update_auto()` is a no-op while in `Manual` mode, so incoming data never
+/// disturbs a pinned range. Normalization stays consistent with the GPU shader
+/// because `normalize(float)` delegates to the shared free `normalize()`.
+class RangeModel
+{
+public:
+  RangeModel() = default;
+
+  /// In `Auto` mode, set the tracked extent to the data's `[min, max]`. A
+  /// no-op in `Manual` mode (a pinned range ignores incoming data — this is
+  /// the clamp that keeps an outlier from re-widening the operator's choice).
+  /// An inverted `[min, max]` is normalized (swapped to `min <= max`) so the
+  /// resulting range stays usable rather than collapsing to the degenerate case.
+  /// NaN/inf inputs are **not** special-cased: a NaN bound makes every
+  /// subsequent `normalize()` return 0 via the degenerate-range guard
+  /// (`!(hi > lo)` is always true when a bound is NaN); infinite bounds produce
+  /// a defined, no-UB result. Safe by construction — no NaN rejection is done.
+  void update_auto(float min, float max);
+
+  /// Pin the range to `[lo, hi]` and switch to `Manual` mode. An inverted
+  /// `[lo, hi]` is swapped so `lo() <= hi()` (an operator dragging the handles
+  /// past each other shouldn't break rendering); a zero-width `lo == hi` is
+  /// left as-is and handled by `normalize()`'s degenerate-range guard.
+  /// NaN/inf inputs are **not** special-cased: a NaN bound makes every
+  /// subsequent `normalize()` return 0 via the degenerate-range guard;
+  /// infinite bounds produce a defined, no-UB result. Safe by construction —
+  /// no NaN rejection is done.
+  void set_manual(float lo, float hi);
+
+  /// Return to `Auto` mode. The extent is left as-is until the next
+  /// `update_auto()` refreshes it from data.
+  void reset();
+
+  float lo() const {return lo_;}
+  float hi() const {return hi_;}
+  RangeMode mode() const {return mode_;}
+
+  /// Normalize `value` across the current `[lo, hi]`. Delegates to the shared
+  /// free `normalize()` so the CPU path, the GPU shader and this model all
+  /// agree (raw position, may be < 0 or > 1; degenerate range returns 0).
+  float normalize(float value) const;
+
+private:
+  RangeMode mode_{RangeMode::Auto};
+  float lo_{0.0f};
+  float hi_{1.0f};
+};
+
 }  // namespace marine_colormap
 
 #endif  // MARINE_COLORMAP__TRANSFER_HPP_

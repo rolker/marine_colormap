@@ -105,6 +105,10 @@ const std::vector<Palette> & registry()
           rgb8(219, 41, 51), rgb8(166, 51, 51), rgb8(153, 10, 15)}),
     even("viridis", detail::viridis_colors()),
     even("turbo", detail::turbo_colors()),
+    // Bathy-uncertainty warning ramp (issue #7 operator requirement): a green
+    // -> yellow -> red diverging stoplight, t=0 good -> t=0.5 caution ->
+    // t=1 bad. Appended last to keep existing indices stable.
+    even("quality", {rgb8(0, 170, 0), rgb8(255, 215, 0), rgb8(210, 0, 0)}),
   };
   return kPalettes;
 }

@@ -24,12 +24,41 @@ path uploads as a texture). Consumers convert the plain color type to
 - `marine_colormap/transfer.hpp` — `TransferParams` (min/max, gain,
   contrast/gamma, alpha ramp, below-floor and no-data sentinels) plus the shared
   pure `normalize()` / `apply_response()` (CPU and the GPU shader use the same
-  formula).
+  formula). Also `RangeModel` (see below).
 - `marine_colormap/colormap.hpp` — `lookup(value, palette, params)` (CPU) and
   `bake_lut(palette, params, n)` (the 1-D LUT for the GPU path). By construction
   `lookup(v)` equals the LUT indexed at `normalize(v, min, max)`.
 - `marine_colormap/shader.hpp` — `colormap_glsl()`: GL-free GLSL source (the
   GPU/Tier-2 math), see below.
+
+## Range model (auto vs. manual)
+
+`TransferParams::min`/`max` are plain floats with no notion of *where* the range
+came from. `RangeModel` (in `transfer.hpp`) adds that distinction — it sits
+**beside** `TransferParams` (it does not wrap or replace it) and resolves to a
+`(lo, hi)` extent the caller copies into `params.min`/`max` (or the GPU
+`u_min`/`u_max` uniforms):
+
+- **`RangeMode::Auto`** — `update_auto(min, max)` tracks the latest data
+  extents, so structure isn't collapsed by a stale wide range.
+- **`RangeMode::Manual`** — `set_manual(lo, hi)` pins the range and switches to
+  Manual; `update_auto()` is then a **no-op**, so an outlier band (e.g.
+  backscatter max 925, mean 0.16) can't re-widen the operator's chosen window.
+- `reset()` returns to Auto; `lo()`/`hi()`/`mode()` are getters.
+- `normalize(value)` delegates to the shared free `normalize(value, lo(), hi())`
+  so CPU, GPU and model stay consistent (raw position; callers clamp).
+
+```cpp
+marine_colormap::RangeModel range;
+range.update_auto(data_min, data_max);   // Auto: follows the data
+// operator pins it to tame an outlier band:
+range.set_manual(0.0f, 1.0f);            // -> Manual; update_auto() now ignored
+params.min = range.lo();
+params.max = range.hi();
+```
+
+See `docs/decisions/0001-range-model.md`. The interactive colorbar widget that
+drives this model lands in Part 2 (a new `marine_colormap_widgets` package).
 
 ## GPU (GLSL) usage
 
@@ -75,10 +104,15 @@ shared. Recipe:
 
 ## Palettes
 
-`grayscale`, `bronze`, `thermal`, `viridis`, `turbo`. The perceptual ramps
-`viridis` (van der Walt & Smith) and `turbo` (Mikhailov, Google) are the exact
-**canonical 256-entry tables** as distributed by matplotlib — embedded in
+`grayscale`, `bronze`, `thermal`, `viridis`, `turbo`, `quality`. The perceptual
+ramps `viridis` (van der Walt & Smith) and `turbo` (Mikhailov, Google) are the
+exact **canonical 256-entry tables** as distributed by matplotlib — embedded in
 `src/perceptual_palettes.cpp`, not hand-rolled.
+
+`quality` is a green → yellow → red warning ramp (`t=0` good → `t=0.5` caution →
+`t=1` bad) — the bathy-uncertainty warning ramp from issue #7's operator
+requirement. The registry is append-only, so `quality` is index 5; persist a
+palette by name, not index.
 
 ## License
 
