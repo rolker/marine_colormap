@@ -170,3 +170,21 @@ Widget gtest (offscreen Qt): **tests="3" failures="0" errors="0"**. Not pushed
 
 ### Next step
 Open PR for #7 (Part 2) — Round-1 review approved; all 5 suggestions now resolved.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-06-29 09:12 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Verdict**: approved
+
+**Branch**: feature/issue-7 at `0edc04f`
+**Mode**: pre-push
+**Depth**: Deep (reason: new ADR-0002 + new ROS 2 package + multi-package CI change)
+**Must-fix**: 0 | **Suggestions**: 1
+**Round**: 2 | **Ship**: recommended — 0 must-fix; all 5 Round-1 suggestions resolved (commit 39e65ee); clean cpplint/cppcheck + two Deep adversarial passes; one claimed must-fix rejected as false positive
+
+### Findings
+- [ ] (suggestion) `updateAuto()` doesn't reconcile model extent with the widget domain; auto-extents wider than `setDomain()` clamp handles to axis edges (graceful, no UB) — consider documenting domain ⊇ extents or widening domain — `marine_colormap_widgets/src/colormap_legend_widget.cpp:93`
+
+### Notes
+- Rejected (false positive): Lens-B claim that `ament_export_dependencies(... Qt5Widgets)` must be `Qt5`. `Qt5WidgetsConfig.cmake` exists; `find_package(Qt5Widgets)` is valid and exporting the component is more correct than bare `Qt5` (which wouldn't define the `Qt5::Widgets` target).
