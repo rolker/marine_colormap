@@ -45,3 +45,67 @@ issue: 7
 - [ ] (suggestion) Qt SHARED lib with `Q_OBJECT`/signals needs moc — `CMakeLists.txt` step (plan.md:76) should enable `set(CMAKE_AUTOMOC ON)` (or `qt5_wrap_cpp`), else the widget fails to link (undefined vtable/signal symbols). Call it out so implementation doesn't rediscover it. — `plan.md:76`
 - [ ] (suggestion) Declare Qt with rosdep-resolvable keys — `package.xml` should depend on `qtbase5-dev` (rosdep key) rather than the bare CMake name "Qt5Widgets", so `rosdep install --from-paths` in the `ros:jazzy-ros-core` CI container actually pulls the Qt dev headers + offscreen platform plugin needed for the offscreen test. — `plan.md:75`
 - [ ] (suggestion) Update package README — the top-level `README.md` describes only the Qt-free core and teases the Part-2 widget as future; adding the package should update it to point at `marine_colormap_widgets` and ADR-0002 ("a change includes its consequences" — docs). Not in the Files-to-Change table. — `plan.md:70-79`
+
+## Implementation
+**Status**: complete
+**When**: 2026-06-29 08:27 +00:00
+**By**: Claude Code Agent (Claude Opus)
+
+**Branch**: feature/issue-7 at `1add5c0` (3 ordered commits on top of `5ed4cf5`)
+
+### Delivered
+- **ADR-0002** (`docs/decisions/0002-colorbar-widget.md`): widget owns its
+  `RangeModel` (no exposed reference), the separate-package decision + the
+  **container-repo restructure** (below), handle-clamp policy (enforces ADR-0001
+  `lo <= hi`; inverted drag prevented, not reversed), the
+  `rangeChanged(float,float)` contract, and reset-to-Auto behavior.
+- **New package `marine_colormap_widgets`** — `package.xml` (ament_cmake;
+  `<depend>marine_colormap</depend>`; Qt via the rosdep key
+  `<depend>qtbase5-dev</depend>`); `CMakeLists.txt` (`find_package(Qt5 ... Widgets)`,
+  `set(CMAKE_AUTOMOC ON)`, SHARED widget lib, install/export, gtest scaffold with
+  `ENV QT_QPA_PLATFORM=offscreen`).
+- **`ColormapLegendWidget`** (header + cpp): `QWidget`+`Q_OBJECT` owning a
+  `RangeModel`; `setPalette`/`setLut`/`setDomain`/`updateAuto`, `lo()/hi()/mode()`,
+  `reset()` slot, `rangeChanged` signal; `paintEvent` (ramp via `model_.normalize`
+  per column + value axis + lo/hi handle tabs); mouse press/move/release drag with
+  cross-clamp → `set_manual` → `rangeChanged` → `update()`. Double-click also
+  resets (UX; the slot is the tested contract).
+- **Tests** (`test/test_colormap_legend_widget.cpp`, `ament_cmake_gtest` +
+  `QApplication` under offscreen Qt): drag→Manual + signal emitted + handles
+  didn't cross; `reset()`→Auto (+1 emission); drag-past-cross → `lo() < hi()`.
+
+### Plan-review findings addressed (all 4)
+- **(MUST-FIX) ci.yml** — now builds `--packages-up-to marine_colormap_widgets`
+  and tests `--packages-select marine_colormap marine_colormap_widgets`; rosdep
+  resolves `qtbase5-dev`.
+- **(suggestion) `CMAKE_AUTOMOC ON`** — set; the Q_OBJECT header is also listed as
+  a library source so AUTOMOC scans it (it lives in `include/`, not beside the
+  `.cpp` — without this the lib's moc was empty and the test failed to link
+  `staticMetaObject`/vtable).
+- **(suggestion) `qtbase5-dev` rosdep key** — used in `package.xml` (not the bare
+  CMake name).
+- **(suggestion) README** — repo root README rewritten as a multi-package
+  container overview pointing at both packages + ADR-0001/0002; the core README
+  moved with the core and trimmed to a sibling pointer.
+
+### Structural change (beyond the literal plan — required for correctness)
+The plan assumed colcon would auto-discover a nested `marine_colormap_widgets/`.
+It does **not**: colcon prunes a subtree once it identifies a package, so with the
+core package at the repo root the widget package was invisible to `colcon list`
+(verified) — it would be built/tested by neither CI nor the `ui_ws` layer. Fixed
+by moving the core into a **`marine_colormap/` subdirectory**, making the repo a
+container with two sibling packages (the `rqt_operator_tools` layout).
+`find_package`/`#include` paths are install-space and unaffected.
+
+### Build/test status (in-container, Qt5 + offscreen plugin present)
+Clean from-scratch `colcon build --packages-up-to marine_colormap_widgets
+--cmake-args -DBUILD_TESTING=ON` → **2 packages finished**. `colcon test
+--packages-select marine_colormap marine_colormap_widgets
+--return-code-on-test-failure` → **2 packages finished, no failures**.
+`colcon test-result --verbose` → **132 tests, 0 errors, 0 failures, 17 skipped**.
+Widget gtest: **tests="3" failures="0" errors="0"** (offscreen Qt ran in-container,
+no host verification needed). Not pushed (host performs pushes).
+
+### Next step
+Open PR for #7 (Part 2). Deferred to consumer repos (per ADR-0002): wiring
+`rangeChanged` into camp#142 / `rqt_marine_sonar` / `rviz_sonar_image`.
