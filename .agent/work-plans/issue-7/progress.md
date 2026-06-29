@@ -19,3 +19,15 @@ issue: 7
 - [ ] Widget interaction test should be automated (not "or recorded manual verification") per the project's established test pattern.
 - [ ] Plan must clarify how the range model relates to the existing `TransferParams::min`/`max` fields — whether it wraps, replaces, or augments them — and update consumers accordingly in the same PRs.
 - [ ] Project ADR-0001 may need an addendum covering the new range model API and the widget tier (currently only Tier 1 core and Tier 2 GPU math are defined there).
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-06-29 10:00 +00:00
+**By**: Claude Code Agent (Claude Sonnet)
+
+**Plan**: `.agent/work-plans/issue-7/plan.md` at `1c02312`
+**Branch**: feature/issue-7 at `1c02312`
+**Phases**: 2 (this PR = Part 1 range model; Part 2 = marine_colormap_widgets widget)
+
+### Open questions
+- [ ] Should `RangeModel` expose an explicit `clamp()` helper for the uncertainty sentinel case, or rely on the existing raw-value `normalize()` + GPU clamp contract?
