@@ -128,3 +128,45 @@ Open PR for #7 (Part 2). Deferred to consumer repos (per ADR-0002): wiring
 - [ ] (suggestion) `QMouseEvent::localPos()` deprecated since Qt 5.15; prefer `position()` — `marine_colormap_widgets/src/colormap_legend_widget.cpp:196`
 - [ ] (suggestion) Test links `Qt5::Widgets` redundantly (already transitive via the lib target) — `marine_colormap_widgets/CMakeLists.txt:73`
 - [ ] (suggestion) `ros:jazzy-ros-base` is a more conventional CI base than `ros-core` — `.github/workflows/ci.yml`
+
+## Implementation
+**Status**: complete
+**When**: 2026-06-29 09:10 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Commit**: 39e65ee on `feature/issue-7`
+
+Addressed all 5 suggestions from the Round-1 Local Review (pre-push, approved):
+
+- **(suggestion) Guard palette count** — `color_at` (`colormap_legend_widget.cpp`)
+  now early-returns a transparent `QColor(0,0,0,0)` when
+  `marine_colormap::palette_count() == 0`, before the `std::clamp` index math.
+  No more UB / crash on an empty or unset palette.
+- **(suggestion) Emit `rangeChanged` only on change** — `updateAuto()` and
+  `reset()` now snapshot `(lo, hi, mode)` before mutating the model and emit
+  `rangeChanged` + repaint **only** if any of the three changed. `updateAuto()`
+  in Manual mode (a model no-op) now neither emits nor repaints; `reset()`
+  emits only when it actually leaves Manual (or otherwise changes state).
+- **(suggestion) Modernize deprecated mouse API** — added a version-guarded
+  `eventLocalPos()` helper: `QMouseEvent::position()` on Qt6, `localPos()` on
+  Qt5. (Note: in Qt 5.15 `position()` does not exist and `localPos()` is not
+  yet deprecated — a bare `position()` fails to compile against the Jazzy Qt5
+  headers, so the guard is required to honor the suggestion while keeping the
+  Qt5 build green.) Both call sites updated.
+- **(suggestion) Drop redundant Qt link** — removed the explicit
+  `Qt5::Widgets` from the test target's `target_link_libraries`; it is
+  transitive via the widget lib's public link.
+- **(suggestion) CI base image** — `ci.yml` base switched from
+  `ros:jazzy-ros-core` to `ros:jazzy-ros-base`. rosdep still resolves
+  `qtbase5-dev` + offscreen plugin on ros-base.
+
+### Build/test status (in-container, Qt5 5.15.13 + offscreen plugin present)
+Clean from-scratch `colcon build --packages-up-to marine_colormap_widgets
+--cmake-args -DBUILD_TESTING=ON` → **2 packages finished**. `colcon test
+--packages-select marine_colormap marine_colormap_widgets
+--return-code-on-test-failure` → **2 packages finished, 100% (7/7 ctest) passed**.
+`colcon test-result --verbose` → **132 tests, 0 errors, 0 failures, 17 skipped**.
+Widget gtest (offscreen Qt): **tests="3" failures="0" errors="0"**. Not pushed
+(host performs pushes).
+
+### Next step
+Open PR for #7 (Part 2) — Round-1 review approved; all 5 suggestions now resolved.
