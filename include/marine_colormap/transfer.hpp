@@ -97,9 +97,14 @@ public:
   /// In `Auto` mode, set the tracked extent to the data's `[min, max]`. A
   /// no-op in `Manual` mode (a pinned range ignores incoming data — this is
   /// the clamp that keeps an outlier from re-widening the operator's choice).
+  /// An inverted `[min, max]` is normalized (swapped to `min <= max`) so the
+  /// resulting range stays usable rather than collapsing to the degenerate case.
   void update_auto(float min, float max);
 
-  /// Pin the range to `[lo, hi]` and switch to `Manual` mode.
+  /// Pin the range to `[lo, hi]` and switch to `Manual` mode. An inverted
+  /// `[lo, hi]` is swapped so `lo() <= hi()` (an operator dragging the handles
+  /// past each other shouldn't break rendering); a zero-width `lo == hi` is
+  /// left as-is and handled by `normalize()`'s degenerate-range guard.
   void set_manual(float lo, float hi);
 
   /// Return to `Auto` mode. The extent is left as-is until the next

@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 > **Numbering note.** This is **marine_colormap's own** ADR-0001 — the first
 > decision recorded *inside this package's* `docs/decisions/`. It is distinct

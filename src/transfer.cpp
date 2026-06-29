@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <tuple>
 
 namespace marine_colormap
 {
@@ -43,14 +44,16 @@ void RangeModel::update_auto(float min, float max)
   if (mode_ != RangeMode::Auto) {
     return;  // a pinned (Manual) range ignores incoming data
   }
-  lo_ = min;
-  hi_ = max;
+  // Normalize the order so an inverted [min, max] still yields a usable range
+  // instead of collapsing every sample to 0 via the degenerate-range guard.
+  std::tie(lo_, hi_) = std::minmax(min, max);
 }
 
 void RangeModel::set_manual(float lo, float hi)
 {
-  lo_ = lo;
-  hi_ = hi;
+  // Swap an inverted range rather than rejecting it: an operator dragging the
+  // low/high handles past each other should still render correctly.
+  std::tie(lo_, hi_) = std::minmax(lo, hi);
   mode_ = RangeMode::Manual;
 }
 

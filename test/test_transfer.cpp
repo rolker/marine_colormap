@@ -153,3 +153,42 @@ TEST(RangeModel, ResetReturnsToAutoAndResumesTracking)
   EXPECT_FLOAT_EQ(rm.lo(), -20.0f);
   EXPECT_FLOAT_EQ(rm.hi(), 5.0f);
 }
+
+TEST(RangeModel, ResetPreservesExtentUntilNextUpdate)
+{
+  // reset() returns to Auto but must NOT zero the range: lo()/hi() keep the
+  // prior extent until the next update_auto() refreshes it from data.
+  RangeModel rm;
+  rm.set_manual(-70.0f, 0.0f);
+  rm.reset();
+  EXPECT_EQ(rm.mode(), RangeMode::Auto);
+  EXPECT_FLOAT_EQ(rm.lo(), -70.0f);  // extent preserved, not reset to defaults
+  EXPECT_FLOAT_EQ(rm.hi(), 0.0f);
+  // Normalization still uses the preserved extent.
+  EXPECT_FLOAT_EQ(rm.normalize(-35.0f), 0.5f);
+}
+
+TEST(RangeModel, SetManualSwapsInvertedRange)
+{
+  // An inverted range (hi, lo) must be swapped, not silently collapse every
+  // sample to 0 via the degenerate-range guard. set_manual(1, 0) == [0, 1].
+  RangeModel rm;
+  rm.set_manual(1.0f, 0.0f);  // inverted
+  EXPECT_FLOAT_EQ(rm.lo(), 0.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 1.0f);
+  EXPECT_FLOAT_EQ(rm.normalize(0.25f), 0.25f);  // correct, not all-zero
+  // dB-style inverted drag normalizes the same as the forward range.
+  rm.set_manual(0.0f, -70.0f);  // inverted
+  EXPECT_FLOAT_EQ(rm.lo(), -70.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 0.0f);
+  EXPECT_FLOAT_EQ(rm.normalize(-35.0f), 0.5f);
+}
+
+TEST(RangeModel, AutoSwapsInvertedDataExtents)
+{
+  // update_auto() likewise normalizes an inverted [min, max].
+  RangeModel rm;
+  rm.update_auto(10.0f, -50.0f);  // inverted
+  EXPECT_FLOAT_EQ(rm.lo(), -50.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 10.0f);
+}
