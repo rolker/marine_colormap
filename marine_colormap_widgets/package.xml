@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>marine_colormap_widgets</name>
+  <version>0.1.0</version>
+  <description>Qt5 widgets for the marine_colormap library: an interactive
+  colorbar legend (ColormapLegendWidget) that paints the value-&gt;color mapping
+  and lets an operator drag range handles to pin a manual window over an outlier
+  band. Owns a marine_colormap::RangeModel and emits rangeChanged on drag/reset.
+  See ADR-0002.</description>
+  <maintainer email="roland@ccom.unh.edu">Roland Arsenault</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>marine_colormap</depend>
+  <!-- Qt via the rosdep key (not the bare CMake name "Qt5Widgets"), so
+       `rosdep install` pulls the Qt5 dev headers + the offscreen platform
+       plugin CI needs for the headless widget test. -->
+  <depend>qtbase5-dev</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
