@@ -38,4 +38,30 @@ float apply_response(float t, float gain, float contrast)
   return std::clamp(t, 0.0f, 1.0f);
 }
 
+void RangeModel::update_auto(float min, float max)
+{
+  if (mode_ != RangeMode::Auto) {
+    return;  // a pinned (Manual) range ignores incoming data
+  }
+  lo_ = min;
+  hi_ = max;
+}
+
+void RangeModel::set_manual(float lo, float hi)
+{
+  lo_ = lo;
+  hi_ = hi;
+  mode_ = RangeMode::Manual;
+}
+
+void RangeModel::reset()
+{
+  mode_ = RangeMode::Auto;
+}
+
+float RangeModel::normalize(float value) const
+{
+  return marine_colormap::normalize(value, lo_, hi_);
+}
+
 }  // namespace marine_colormap

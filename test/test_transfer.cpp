@@ -20,6 +20,8 @@
 
 using marine_colormap::apply_response;
 using marine_colormap::normalize;
+using marine_colormap::RangeMode;
+using marine_colormap::RangeModel;
 
 TEST(Transfer, NormalizeMapsRange)
 {
@@ -76,4 +78,78 @@ TEST(Transfer, ResponseGainThenGammaClampOrder)
   // Negative gain clamps to 0; non-positive contrast is passthrough (no gamma).
   EXPECT_FLOAT_EQ(apply_response(0.5f, -1.0f, 2.0f), 0.0f);
   EXPECT_FLOAT_EQ(apply_response(0.5f, 1.0f, 0.0f), 0.5f);
+}
+
+TEST(RangeModel, DefaultsToAutoUnitRange)
+{
+  RangeModel rm;
+  EXPECT_EQ(rm.mode(), RangeMode::Auto);
+  EXPECT_FLOAT_EQ(rm.lo(), 0.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 1.0f);
+}
+
+TEST(RangeModel, AutoTracksDataExtents)
+{
+  RangeModel rm;
+  rm.update_auto(-70.0f, 0.0f);  // dB-style frame
+  EXPECT_EQ(rm.mode(), RangeMode::Auto);
+  EXPECT_FLOAT_EQ(rm.lo(), -70.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 0.0f);
+  // A later frame replaces the extent (range follows the data).
+  rm.update_auto(-50.0f, 10.0f);
+  EXPECT_FLOAT_EQ(rm.lo(), -50.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 10.0f);
+}
+
+TEST(RangeModel, SetManualSwitchesModeAndPins)
+{
+  RangeModel rm;
+  rm.set_manual(0.0f, 1.0f);
+  EXPECT_EQ(rm.mode(), RangeMode::Manual);
+  EXPECT_FLOAT_EQ(rm.lo(), 0.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 1.0f);
+}
+
+TEST(RangeModel, ManualIgnoresDataExceedingRange)
+{
+  // The #7 case: an outlier band (max 925) must not re-widen an operator's
+  // pinned [0, 1]. update_auto() is a no-op while Manual.
+  RangeModel rm;
+  rm.set_manual(0.0f, 1.0f);
+  rm.update_auto(0.16f, 925.0f);
+  EXPECT_EQ(rm.mode(), RangeMode::Manual);
+  EXPECT_FLOAT_EQ(rm.lo(), 0.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 1.0f);
+  // A value past the pinned range still normalizes raw > 1 (caller clamps).
+  EXPECT_GT(rm.normalize(925.0f), 1.0f);
+}
+
+TEST(RangeModel, NormalizeMatchesFreeFunction)
+{
+  RangeModel rm;
+  rm.set_manual(-70.0f, 0.0f);
+  for (float v : {-70.0f, -35.0f, 0.0f, 10.0f}) {
+    EXPECT_FLOAT_EQ(rm.normalize(v), normalize(v, rm.lo(), rm.hi()));
+  }
+}
+
+TEST(RangeModel, DegenerateRangeNormalizesToZero)
+{
+  RangeModel rm;
+  rm.set_manual(5.0f, 5.0f);  // zero-width
+  EXPECT_FLOAT_EQ(rm.normalize(5.0f), 0.0f);
+  EXPECT_FLOAT_EQ(rm.normalize(99.0f), 0.0f);
+}
+
+TEST(RangeModel, ResetReturnsToAutoAndResumesTracking)
+{
+  RangeModel rm;
+  rm.set_manual(0.0f, 1.0f);
+  ASSERT_EQ(rm.mode(), RangeMode::Manual);
+  rm.reset();
+  EXPECT_EQ(rm.mode(), RangeMode::Auto);
+  // Tracking resumes: a no-op while Manual now takes effect.
+  rm.update_auto(-20.0f, 5.0f);
+  EXPECT_FLOAT_EQ(rm.lo(), -20.0f);
+  EXPECT_FLOAT_EQ(rm.hi(), 5.0f);
 }
