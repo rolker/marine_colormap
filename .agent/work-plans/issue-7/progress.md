@@ -143,3 +143,41 @@ colorbar widget) is a separate run / separate PR and still leaves #7 open.
      ADR status Proposed->Accepted. ament_cpplint clean; cppcheck only
      pre-existing style notes on untouched lines. Lens B clean. -->
 
+
+## Implementation
+**Status**: complete
+**When**: 2026-06-29 07:36 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Scope**: address-findings round 2 — optional NaN/inf lock-in (the lone remaining suggestion)
+
+**Branch**: feature/issue-7 at `9045578`
+
+### NaN/inf lock-in (round-2 optional suggestion)
+- `update_auto()`/`set_manual()` still do **not** special-case NaN/inf — the existing
+  safe behavior is now *documented* and *locked in by test*, per the round-2 review.
+- Doc notes added to the `update_auto`/`set_manual` header comments
+  (`include/marine_colormap/transfer.hpp`) and beside the `std::minmax` calls in
+  `src/transfer.cpp`: NaN bounds fall through to `normalize()`'s degenerate-range
+  guard (`!(hi > lo)` is always true with a NaN bound) → returns 0; inf bounds give a
+  defined, no-UB result. No NaN-rejection logic added (per the review's explicit ask).
+- Two lock-in tests in `test/test_transfer.cpp` (assert *actual* current behavior):
+  - `RangeModel.NaNBoundsAreNotSpecialCasedButStayWellDefined` — NaN as lo/hi via both
+    `set_manual()` and `update_auto()` → `normalize()` of any value (incl. NaN) returns 0.
+  - `RangeModel.InfiniteBoundsStayWellDefinedNoUB` — `[0, +inf]` flattens finite samples
+    to 0; `[-inf, 0]` yields the indeterminate `inf/inf` → NaN (defined, no UB). Pinned so
+    the edge is documented, not silently relied on.
+
+### Build + test (in-container)
+- Built: `./build.sh marine_colormap` → `Finished <<< marine_colormap` (1 package finished).
+- Tested: `./test.sh marine_colormap` →
+  **110 tests, 0 errors, 0 failures, 14 skipped** (skipped = lint tools absent in container).
+  Both new `RangeModel` lock-in tests ran green (verified in `test_transfer.gtest.xml`).
+
+### Commit
+- `9045578` test/docs(marine_colormap#7): lock in + document NaN/inf range behavior
+  (agent identity; hooks ran, no `--no-verify`; not pushed).
+
+### Next step
+Round-2 review's lone optional item is now resolved. Branch ready for the Part 1 PR
+("Part of #7"); Part 2 (the `marine_colormap_widgets` Qt colorbar widget) remains a
+separate run / separate PR and still leaves #7 open.
