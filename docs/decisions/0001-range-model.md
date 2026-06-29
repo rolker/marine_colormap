@@ -72,6 +72,23 @@ caller needing it. If a concrete use appears (e.g. an uncertainty sentinel that
 must distinguish "beyond range" from "at the end"), add it then, with the case
 that motivates it.
 
+### Inverted range and reversal
+
+`set_manual(lo, hi)` and `update_auto(min, max)` enforce the invariant
+**`lo() <= hi()`** by ordering their inputs (`std::minmax`), rather than
+rejecting them or emitting the all-zeros a negative span would otherwise
+produce. An inverted input — e.g. an operator dragging the Part-2 colorbar's
+min/max handles past each other — is therefore normalized to a usable range; it
+is **not** interpreted as a request to *reverse* the colormap.
+
+**Reversal** (mapping high data values to the low end of the ramp) is a
+**deliberate future feature**, to be added as an **explicit toggle** (e.g. a
+`reversed` flag), not inferred from `lo > hi`. Overloading an inverted range to
+mean "reverse" is ambiguous — it cannot distinguish an accidental handle-cross
+from an intentional flip — so the model keeps the `lo <= hi` invariant, the
+Part-2 widget will clamp handles so they cannot cross, and reversal, when
+wanted, will be requested explicitly. (Operator decision, 2026-06-29.)
+
 ### `quality` warning palette
 
 A `quality` palette (`green → yellow → red`, `t=0` good → `t=0.5` caution →
