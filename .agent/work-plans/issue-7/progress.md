@@ -109,3 +109,22 @@ no host verification needed). Not pushed (host performs pushes).
 ### Next step
 Open PR for #7 (Part 2). Deferred to consumer repos (per ADR-0002): wiring
 `rangeChanged` into camp#142 / `rqt_marine_sonar` / `rviz_sonar_image`.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-06-29 08:50 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Verdict**: approved
+
+**Branch**: feature/issue-7 at `a7c260c`
+**Mode**: pre-push
+**Depth**: Deep (reason: 1374 insertions / 29 files, new ADR-0002, CI workflow change)
+**Must-fix**: 0 | **Suggestions**: 5
+**Round**: 1 | **Ship**: recommended — no must-fix; clean static analysis + two Deep adversarial passes, only minor robustness/cosmetic suggestions
+
+### Findings
+- [ ] (suggestion) Unguarded `palette_count()>0` assumption in `color_at` (std::clamp UB if ever 0) — `marine_colormap_widgets/src/colormap_legend_widget.cpp:152`
+- [ ] (suggestion) `updateAuto()`/`reset()` emit `rangeChanged` unconditionally; `updateAuto` emits even as a Manual-mode no-op — `marine_colormap_widgets/src/colormap_legend_widget.cpp:81`
+- [ ] (suggestion) `QMouseEvent::localPos()` deprecated since Qt 5.15; prefer `position()` — `marine_colormap_widgets/src/colormap_legend_widget.cpp:196`
+- [ ] (suggestion) Test links `Qt5::Widgets` redundantly (already transitive via the lib target) — `marine_colormap_widgets/CMakeLists.txt:73`
+- [ ] (suggestion) `ros:jazzy-ros-base` is a more conventional CI base than `ros-core` — `.github/workflows/ci.yml`
