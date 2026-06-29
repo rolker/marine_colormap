@@ -50,3 +50,58 @@ issue: 7
 - [ ] (suggestion) Widget Qt-target-vs-package decision (review-issue action a) asserted as a new `marine_colormap_widgets` package but not yet recorded as an ADR; state where that ADR lands — `plan.md:14`
 - [ ] (suggestion) New `docs/decisions/0001-range-model.md` shares the number "0001" with the cross-cutting project ADR-0001; cross-reference it to avoid confusion — `plan.md:35`
 - [ ] (suggestion) Resolve/close the `clamp()` open question during implementation — existing `normalize()` + `apply_response()` already clamp, so an explicit helper is likely unnecessary — `plan.md:88`
+
+## Implementation
+**Status**: complete
+**When**: 2026-06-29 07:15 +00:00
+**By**: Claude Opus
+
+**Branch**: feature/issue-7
+**Scope**: Part 1 only (range model + quality palette, Qt-free core). No Qt widget,
+no `marine_colormap_widgets` package — that is Part 2 (separate run). PR is
+**"Part of #7"** — does NOT close #7.
+
+### What was done
+- **`RangeModel`** (`include/marine_colormap/transfer.hpp`, `src/transfer.cpp`) —
+  augments (does not wrap/replace) `TransferParams`. `RangeMode::{Auto, Manual}`;
+  `update_auto(min,max)` tracks data extents in Auto (replace, not accumulate) and
+  is a **no-op in Manual**; `set_manual(lo,hi)` pins + switches to Manual;
+  `reset()` → Auto; getters `lo()`/`hi()`/`mode()`; `normalize(value)` delegates to
+  the shared free `normalize(value, lo(), hi())`. `TransferParams` fields unchanged —
+  callers copy `lo()`/`hi()` into `params.min`/`max` (or GPU `u_min`/`u_max`).
+- **`quality` palette** (`src/palette.cpp`) — `even("quality", {green, yellow, red})`
+  (t=0 good → t=0.5 caution → t=1 bad), appended at registry index 5 per the
+  append-only, name-keyed contract.
+- **ADR** `docs/decisions/0001-range-model.md` (creates `docs/decisions/`) — records
+  the Auto/Manual API + its beside-`TransferParams` relationship; notes the widget
+  tier is Part 2 in a new `marine_colormap_widgets` package.
+- **Tests** — `test/test_transfer.cpp`: 7 `RangeModel` tests (default Auto/unit
+  range, Auto tracking, set_manual switch+pin, Manual ignores exceeding data,
+  normalize() == free normalize(), degenerate zero-width range, reset()→Auto +
+  resumes tracking). `test/test_palette.cpp`: `quality` present at index 5 by name;
+  t=0 greenish, t=0.5 yellowish, t=1 reddish.
+- **README.md** — new "Range model" section + `quality` in the palette list.
+
+### Five plan-review suggestions — all folded in
+- **Palette traceability** — ADR + commit + README cite `quality` as issue #7's
+  operator requirement (bathy-uncertainty warning ramp), not untracked scope.
+- **Project ADR-0001 cross-reference** — added now in `0001-range-model.md` (not
+  deferred), pointing at `unh_marine_autonomy/.../0001-shared-scalar-colormap.md`.
+- **Widget Qt-package decision recorded** — ADR states the widget lands in a new
+  `marine_colormap_widgets` package (package-boundary decision); the widget's own
+  design ADR lands in Part 2.
+- **"0001" numbering vs project ADR-0001** — explicit numbering note + cross-ref in
+  the ADR disambiguates this package's 0001 from the cross-cutting project 0001.
+- **`clamp()` open question resolved** — NO redundant `clamp()` helper added;
+  existing `normalize()` (raw) + `apply_response()`/`sample()`/GPU sampler already
+  clamp. Rationale recorded in the ADR.
+
+### Build + test
+- Built in-container: `./build.sh marine_colormap` → `Finished <<< marine_colormap`.
+- Tested in-container: `./test.sh marine_colormap` →
+  **105 tests, 0 errors, 0 failures, 14 skipped** (skipped = lint tools absent in
+  container). New `RangeModel` suite (7) and `Palette.QualityWarningRamp` ran green.
+
+### Next step
+Open the Part 1 PR ("Part of #7"). Part 2 (the `marine_colormap_widgets` Qt
+colorbar widget) is a separate run / separate PR and still leaves #7 open.
