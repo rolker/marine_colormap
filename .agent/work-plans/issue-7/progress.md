@@ -105,3 +105,20 @@ no `marine_colormap_widgets` package — that is Part 2 (separate run). PR is
 ### Next step
 Open the Part 1 PR ("Part of #7"). Part 2 (the `marine_colormap_widgets` Qt
 colorbar widget) is a separate run / separate PR and still leaves #7 open.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-06-29 07:15 +00:00
+**By**: Claude Code Agent (Claude Opus)
+**Verdict**: approved
+
+**Branch**: feature/issue-7 at `d9668d0`
+**Mode**: pre-push
+**Depth**: Deep (reason: new ADR `docs/decisions/0001-range-model.md` is a Deep promotion trigger; 200+ total lines)
+**Must-fix**: 0 | **Suggestions**: 3
+**Round**: 1 | **Ship**: recommended — no Must-fix; suggestions are hardening/hygiene only
+
+### Findings
+- [ ] (suggestion) Setters accept inverted range (`lo > hi`) silently; `normalize()` then maps all values to 0 (cross-pass confirmed Lens A+B) — `src/transfer.cpp:41,50`
+- [ ] (suggestion) No test asserts `reset()` preserves the prior extent until the next `update_auto()` — `test/test_transfer.cpp` / `src/transfer.cpp:57`
+- [ ] (suggestion) ADR status is `Proposed` though it merges with its implementation; consider `Accepted` — `docs/decisions/0001-range-model.md:5`
