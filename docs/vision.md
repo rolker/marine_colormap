@@ -128,7 +128,7 @@ to an absolute data value**. Each span between anchored breaks is stretched inde
 to fill its share of the colour table.
 
 - **Zero anchored breaks** is today's behaviour: one ramp stretched edge to edge.
-- **One** is a GMT-style hinge — a topo-bathy palette pivoted at chart datum.
+- **One** is a GMT-style hinge — a topo-bathy palette pivoted at the shoreline.
 - **Two or more** gives shoreline *and* safety contour in a single colormap.
 - **Fully anchored on both ends** is a fixed-domain palette — the costmap case — where
   there is no free range left for an operator to adjust.
@@ -157,7 +157,7 @@ on their own merits: they make a break at the safety contour unambiguous and rem
 whole class of off-by-epsilon bugs at the boundary.
 
 **Breaks are constants in whichever frame the field is expressed in** — see "Frames, not
-live breakpoints" below. Expressed in a water-surface-relative frame, the waterline break
+live breakpoints" below. Expressed relative to the sea surface (`map_tide`), the shoreline break
 sits at 0.0 and a safety break sits at the operator's chosen clearance, and neither has to
 track the tide. That is a simplification over an earlier sketch in which breaks were bound
 to live sources; the binding belongs upstream, on the data, not on the palette.
@@ -171,7 +171,7 @@ water. Breaks clamp rather than cross, reusing the legend widget's existing hand
 
 The near-term driving requirement: a colormap with shoreline and safety-contour breaks,
 used in camp **tide-aware** — shading computed against instantaneous water level rather
-than static chart datum.
+than a static vertical reference.
 
 **This was built here, and the implementation is available to read.** Arsenault, Plumlee,
 Smith, Ware, Brennan and Mayer, *"Fusing Information in a 3D Chart-of-the-Future Display"*
@@ -193,7 +193,7 @@ Three details from that implementation that change how we should design ours:
   bathymetry uses the current time — the paper points out the resulting colour
   discontinuity at the corridor edge as a feature, not an artefact. So the adjustment is
   per-region as well as per-cell.
-- **The shift is applied only below the waterline.** From `gutm.cpp`:
+- **The shift is applied only below the sea surface.** From `gutm.cpp`:
 
   ```cpp
   landHeight = pos[Z] + currentH;
@@ -206,7 +206,7 @@ Three details from that implementation that change how we should design ours:
   Submerged terrain is re-expressed relative to the instantaneous water surface; emergent
   terrain keeps its true elevation. That is obviously right once stated — a hill's height
   does not change with the tide — and it is exactly what a topo-bathy palette needs, since
-  zero in the shifted field *is* the visible waterline.
+  zero in the shifted field *is* the shoreline.
 
 Also worth knowing: GeoNav3D already had the arbitrary-breakpoint idea. The paper notes it
 *"allows hundreds of color zones to be specified which do not have to be equally spaced"*,
@@ -238,38 +238,58 @@ enhanced safety contour is on by default, while water-level adjustment is opt-in
 ### Frames, not live breakpoints
 
 Roland's framing, and it is the cleanest way to state the whole tide question: this is a
-**reference-frame** problem, and it parallels the frame handling the workspace already does
-elsewhere (`mru_transform`, the REP-style frames work).
+**reference-frame** problem. The workspace already has a settled position on marine
+vertical frames, and this document defers to it —
+[mru_transform#8](https://github.com/rolker/mru_transform/issues/8) (re-scoped 2026-08-20
+to a REP-style marine frame-conventions doc) and **ADR-0010** in `unh_marine_autonomy`.
 
-There is a stack of vertical frames:
+**Use that convention's terms, and note what it deliberately excludes:**
 
-| Frame | Offset from the one above | Nature |
-|---|---|---|
-| Chart datum (MLLW) | — | fixed vertical reference |
-| Instantaneous water surface | tide(x, y, t) | varies in space *and* time |
-| Keel | vessel draft | per-vessel constant |
+| Frame | What it is |
+|---|---|
+| `map` | ENU, WGS84 **ellipsoidal**. The entire runtime vertical world is GNSS-ellipsoidal (ADR-0010 D5). |
+| `map_tide` | The current sea surface in ellipsoidal height, **self-measured** by `sea_surface_estimator`. The only runtime vertical datum reference. |
+| `waterline` | A **static URDF frame on the vessel** — where the hull meets the water. Not a property of the terrain. |
 
-A depth value is only meaningful once you say which frame it is in, and each of the display
-questions is really a frame choice. "How deep is the chart here" is the datum frame. "How
-much water is over that rock right now" is the water-surface frame. "Will I hit it" is the
-keel frame — which is why GeoNav3D's safe/warning/danger bands are constants in the keel
-frame rather than depths.
+**There is no `chart_datum` runtime frame, and that is a decision, not an omission.**
+ADR-0010 D5 removes it: there are no tide tables, gauge feeds or datum grids in the
+navigation loop, and a single-offset datum frame was spatially wrong anyway, since the
+MLLW-to-ellipsoid separation is itself a varying surface. Datum conversion happens **at
+import**, through the ROS-free `marine_vertical_datum` library, not at runtime. Roland's
+re-scope of mru#8 states it plainly: *"Our experience does not support having datum frames
+in the TF tree... The tide frame is still valuable."*
+
+So for a live display the frame that matters is **`map_tide`**, and the useful scalar field
+is terrain height relative to it — depth below the current sea surface. Under-keel
+clearance is that minus the vessel's draft, which is a vehicle property reached through the
+`waterline` frame rather than a frame of its own.
+
+**Terminology hazard worth naming**: `waterline` in the frame convention is the *vessel's*
+waterline. Elsewhere in this document "waterline" means the land/sea boundary in the terrain
+— the zero of a tide-shifted field. They are different things. This document should say
+**"shoreline break"** for the terrain feature and reserve `waterline` for the vessel frame.
 
 The consequence for this library is a **narrowing of scope, and a welcome one**:
 
 - **`marine_colormap` should never know about tides, datums or drafts.** It colours a scalar
   field. Which frame that field is expressed in is the consumer's business.
-- **Breakpoints are constants in the chosen frame.** Pick the water-surface frame and the
-  waterline break is 0.0 and the safety break is the operator's clearance — permanently. No
-  live binding, no per-tick palette mutation, no LUT invalidation.
+- **Breakpoints are constants in the chosen frame.** Express the field relative to
+  `map_tide` and the shoreline break is 0.0 and the safety break is the operator's chosen
+  clearance — permanently. No live binding, no per-tick palette mutation, no LUT
+  invalidation.
 - **The transform is where the tide-awareness lives**, applied once, upstream, so the
   colours, the numeric readouts, the contour extraction and any alarms all agree. That is
   the same conclusion S-98 Appendix D reaches by a different route.
 
-One consequence to keep in view: in a water-surface frame, chart datum itself sits at
-−tide, so a display wanting to show *both* the current waterline and chart datum has one
-break that genuinely moves. For navigation that second break is not needed; for survey and
-charting work it may be.
+**One genuine open question, which our convention and the GeoNav3D precedent answer
+differently.** GeoNav3D used a *modelled tide surface* varying across the display; ADR-0010
+D5 uses a *single measured* `map_tide` at the vehicle and keeps models out of the
+navigation loop. For a boat-local display the measured value is the right call and is
+demonstrably more robust. But camp renders wide areas, and across an estuary a sea surface
+measured at the boat is not the sea surface ten kilometres away — which is precisely why
+GeoNav3D built a tide *grid*. Whether a wide-area display needs something the navigation
+loop deliberately does not is unresolved, and it belongs to camp and mru#8 rather than
+here. Worth raising there before the tide-aware camp work starts.
 
 ### Alignment with S-100
 
