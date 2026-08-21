@@ -245,11 +245,12 @@ to a REP-style marine frame-conventions doc) and **ADR-0010** in `unh_marine_aut
 
 **Use that convention's terms, and note what it deliberately excludes:**
 
-| Frame | What it is |
-|---|---|
-| `map` | ENU, WGS84 **ellipsoidal**. The entire runtime vertical world is GNSS-ellipsoidal (ADR-0010 D5). |
-| `map_tide` | The current sea surface in ellipsoidal height, **self-measured** by `sea_surface_estimator`. The only runtime vertical datum reference. |
-| `waterline` | A **static URDF frame on the vessel** — where the hull meets the water. Not a property of the terrain. |
+- **`map`** — ENU on the WGS84 **ellipsoid**. The entire runtime vertical world is
+  GNSS-ellipsoidal (ADR-0010 D5).
+- **`map_tide`** — the current sea surface in ellipsoidal height, **self-measured** by
+  `sea_surface_estimator`. The only runtime vertical datum reference.
+- **`waterline`** — a **static URDF frame on the vessel**, where the hull meets the water.
+  Not a property of the terrain.
 
 **There is no `chart_datum` runtime frame, and that is a decision, not an omission.**
 ADR-0010 D5 removes it: there are no tide tables, gauge feeds or datum grids in the
