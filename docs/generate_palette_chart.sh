@@ -13,7 +13,21 @@ REPO_ROOT="$(dirname "$DOCS_DIR")"
 TOOL="${PALETTE_CHART_BIN:-}"
 if [[ -z "$TOOL" ]]; then
     # Look in a colcon build space next to the usual workspace layout.
-    TOOL="$(find "$REPO_ROOT/../../../build/marine_colormap" -maxdepth 1 -name palette_chart -type f 2>/dev/null | head -1)"
+    #
+    # `-print -quit` rather than piping to `head -1`: under `set -o pipefail` a
+    # pipeline where the reader exits first can fail the whole script on SIGPIPE,
+    # which would make regeneration flaky for no reason. `|| true` covers the
+    # not-found case, which is reported properly just below.
+    # In a colcon layout the repo sits at <ws>/src/<repo> and the build space at
+    # <ws>/build/<pkg>, so walk up two levels -- not three.
+    for candidate in \
+        "$REPO_ROOT/../../build/marine_colormap" \
+        "$REPO_ROOT/../../../build/marine_colormap" \
+        "$REPO_ROOT/build/marine_colormap"; do
+        [[ -d "$candidate" ]] || continue
+        TOOL="$(find "$candidate" -maxdepth 1 -name palette_chart -type f -print -quit 2>/dev/null || true)"
+        [[ -n "$TOOL" ]] && break
+    done
 fi
 if [[ -z "$TOOL" || ! -x "$TOOL" ]]; then
     echo "error: palette_chart not found. Build the package first, or set" >&2
