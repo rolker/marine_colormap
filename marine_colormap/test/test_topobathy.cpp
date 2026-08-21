@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -44,10 +45,18 @@ float channel_distance(const Rgba & a, const Rgba & b)
 
 /// Takes a `const char *` rather than `const std::string &` so a call with a
 /// literal does not create a temporary that -Wdangling-reference flags.
+///
+/// Never returns null: callers dereference the result immediately, and a null
+/// there would segfault and bury the real assertion failure. A missing palette
+/// registers a failure and falls back to a valid one so the test reports the
+/// actual problem and keeps running.
 const Palette * by_name(const char * n)
 {
   const Palette * p = marine_colormap::find_palette(n);
-  EXPECT_NE(nullptr, p) << "palette " << n << " missing";
+  if (p == nullptr) {
+    ADD_FAILURE() << "palette '" << n << "' is missing from the registry";
+    return &marine_colormap::palette(0);
+  }
   return p;
 }
 
@@ -58,14 +67,22 @@ const Palette * by_name(const char * n)
 TEST(TopoBathyRegistry, AppendedWithoutDisturbingExistingIndices)
 {
   // The registry is documented as append-only because consumers persist a
-  // selection by name or index.
-  const std::vector<std::string> expected = {
-    "grayscale", "bronze", "thermal", "viridis", "turbo", "quality",
-    "oleron", "hypsometric"};
-  EXPECT_EQ(expected, marine_colormap::palette_names());
-  EXPECT_EQ(8u, marine_colormap::palette_count());
+  // selection by name or index. Assert that invariant -- the existing names
+  // still sit at their original indices, and the new ones were appended after
+  // them -- rather than pinning the whole list, which would fail every time a
+  // future palette is added without anything actually being wrong.
+  const std::vector<std::string> original = {
+    "grayscale", "bronze", "thermal", "viridis", "turbo", "quality"};
+  const std::vector<std::string> & names = marine_colormap::palette_names();
+  ASSERT_GE(names.size(), original.size() + 2);
+  for (std::size_t i = 0; i < original.size(); ++i) {
+    EXPECT_EQ(original[i], names[i]) << "index " << i << " moved";
+  }
+  ASSERT_TRUE(marine_colormap::palette_index("oleron").has_value());
+  ASSERT_TRUE(marine_colormap::palette_index("hypsometric").has_value());
   EXPECT_EQ(6u, *marine_colormap::palette_index("oleron"));
   EXPECT_EQ(7u, *marine_colormap::palette_index("hypsometric"));
+  EXPECT_EQ(names.size(), marine_colormap::palette_count());
 }
 
 TEST(TopoBathyRegistry, GeneralPurposeRampsStillCarryNoDomain)
