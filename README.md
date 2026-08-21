@@ -12,6 +12,13 @@ package lives in its own subdirectory (the repo root is not itself a package).
 The core stays deliberately Qt-free (project ADR-0001 Tier 1); the Qt cost is
 isolated to `marine_colormap_widgets`. See each package's README for API details.
 
+## Direction
+
+- [`docs/vision.md`](docs/vision.md) — where this library is heading: palette kinds,
+  anchored breakpoints (shoreline / safety-contour / fixed-domain), the three UI
+  tiers, the shading seam, on-disk palettes, and the build order. A roadmap, not a
+  decision record — ADRs below win where they disagree.
+
 ## Decisions
 
 - [`docs/decisions/0001-range-model.md`](docs/decisions/0001-range-model.md) —
