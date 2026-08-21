@@ -77,6 +77,40 @@ workstation tool and must never appear in camp's or rviz's dependency chain.
 doesn't describe what is adjustable and what isn't, those consumers reimplement the policy
 and drift, which is the duplication problem this library exists to solve.
 
+### Legends, and the multi-layer problem
+
+camp has no legend display today, and the guts of one belong here rather than in camp. But
+camp's situation constrains the design in a way a single-view application does not:
+**camp shows several layers at once, each with its own colormap and range, so one legend
+parked in a corner is ambiguous — it cannot say which layer it describes.**
+
+The shape that follows, borrowing from ParaView and QGIS:
+
+- **A compact ramp strip rendered per layer in the layer tree.** QGIS does this, and it is
+  the cheapest possible answer to "which layer is which colour" — always visible, always
+  unambiguous, no extra chrome, and it cannot drift out of sync with the layer list.
+- **A per-layer "show legend" toggle** putting a full labelled legend on screen, with
+  **several visible simultaneously**, each captioned with its layer name and units. This is
+  ParaView's model: a scalar bar per representation, individually toggleable and
+  positionable, labelled with the array it describes. Default to none pinned (or the
+  selected layer only) so a busy chart does not start cluttered.
+- The existing per-layer "Colormap range…" dialog stays as the *editing* surface; these are
+  the *display* surfaces.
+
+**The architectural consequence for this library is the important part: separate the
+painting from the widget.** A tree-item delegate cannot host a `QWidget`, so the ramp
+painter must be usable standalone — draw this palette, with this range, into this
+`QPainter` and rectangle — and the interactive `ColormapLegendWidget` becomes one consumer
+of that painter rather than the only way to draw a legend. Both are driven by the same
+model. If we build only a widget, camp cannot put a ramp in its layer tree.
+
+Two further consequences. **Units and quantity labels stop being optional** once more than
+one legend is on screen — the operator has to be able to tell the metres from the decibels
+at a glance, which reinforces carrying units in palette metadata and labels per lookup
+entry. And **the legend needs a compact degenerate form**: a stepped or categorical legend
+is a keyed swatch list, which is tall and will not fit a tree row, so the compact rendering
+shows the ramp alone and the full keyed form appears only in the expanded legend.
+
 ### Anchored breakpoints — the unifying hypothesis
 
 A palette is a sequence of segments separated by **N breakpoints, each optionally anchored
@@ -336,8 +370,9 @@ Ordered so each step is independently useful and derisks the next.
    `occupancy_grid.cpp` ramp. rviz gives an exact reference, so acceptance is objective.
 4. **Tier-1 selector widget** — cheap, immediately visible in every consumer, and it
    forces the policy-drives-UI question early rather than late.
-5. **Legend variants** for stepped, categorical and multi-break palettes. *(Under-explored
-   — see Open questions.)*
+5. **Legends**: split the ramp painter out from the widget, add the compact per-layer form
+   and the multi-legend display, and add variants for stepped, categorical and multi-break
+   palettes. camp is the driving consumer — it has no legend at all today.
 6. **File loading**: format decision + ADR, search path, registry with provenance and
    reload.
 7. **Shading composition** in the transfer pipeline, CPU and GLSL, coordinated with
@@ -355,9 +390,10 @@ come from configuration.
 - Stop-based or segment-based palette model?
 - Native format: ParaView JSON, or JSON plus first-class `.cpt`?
 - Shadowing policy for user palettes over built-ins: forbidden, warned, or namespaced?
-- **Legend design for the new palette kinds — the least-explored area of this vision.** A
-  stepped or categorical legend is a keyed swatch list, not a continuous bar with two
-  handles; a multi-break legend needs non-linear ticks and break markers.
+- Legend placement in camp: ramp strips in the layer tree, pinned legends in the view, a
+  dock, or some combination — and what the default is on a busy chart.
+- A multi-break legend needs non-linear tick placement and break markers; are the break
+  markers draggable in the compact form, or only in the expanded one?
 - What does a consumer do when a persisted palette name is no longer installed? Silently
   falling back to grayscale on a boat is a bad failure.
 - Do we adopt S-100's CIE xyY component-wise ramp interpolation, or keep interpolating in
