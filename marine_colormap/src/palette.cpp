@@ -89,8 +89,8 @@ Palette even(std::string name, std::vector<Rgba> colors)
 // Canonical built-ins. Order is append-only (see palette.hpp). The `thermal`
 // ramp is the de-duplicated sonar thermal (the rviz_sonar_image ramp had an
 // accidental duplicated stop; this drops it). `bronze` and `grayscale` match the
-// existing sonar definitions. viridis/turbo are intentionally absent until their
-// canonical published tables are imported (ADR-0001 / README).
+// existing sonar definitions. viridis/turbo carry the canonical published
+// matplotlib tables (see perceptual_palettes.cpp).
 const std::vector<Palette> & registry()
 {
   static const std::vector<Palette> kPalettes = {

@@ -58,9 +58,10 @@ private:
 // The registry order is **append-only and name-keyed**: indices never change as
 // palettes are added, so consumers can persist a selection by name (preferred)
 // or index without it silently re-mapping. Current order: 0=grayscale,
-// 1=bronze, 2=thermal, 3=viridis, 4=turbo. (viridis/turbo are the canonical
-// matplotlib tables; see perceptual_palettes.cpp.) New palettes append at the
-// end so existing indices stay stable.
+// 1=bronze, 2=thermal, 3=viridis, 4=turbo, 5=quality. (viridis/turbo are the
+// canonical matplotlib tables; see perceptual_palettes.cpp. `quality` is the
+// green->yellow->red uncertainty ramp from ADR-0001.) New palettes append at
+// the end so existing indices stay stable.
 
 /// All built-in palettes, in registry order.
 const std::vector<Palette> & palettes();
