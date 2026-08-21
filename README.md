@@ -12,6 +12,14 @@ package lives in its own subdirectory (the repo root is not itself a package).
 The core stays deliberately Qt-free (project ADR-0001 Tier 1); the Qt cost is
 isolated to `marine_colormap_widgets`. See each package's README for API details.
 
+## Palettes
+
+![All marine_colormap palettes](docs/palettes.png)
+
+See [`docs/palettes.md`](docs/palettes.md) for what each one is for, the two topo-bathy
+options and when to prefer each, and the fixed-domain costmap table. The chart is generated
+from the live registry — regenerate with `./docs/generate_palette_chart.sh`.
+
 ## Decisions
 
 - [`docs/decisions/0001-range-model.md`](docs/decisions/0001-range-model.md) —
