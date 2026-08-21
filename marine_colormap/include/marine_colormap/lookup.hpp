@@ -56,14 +56,24 @@ bool unbounded_below(Closure c);
 /// True when `c` leaves the range unbounded above (`upper` is unused).
 bool unbounded_above(Closure c);
 
+/// True when `c` includes its `lower` bound. Only meaningful when the closure is
+/// bounded below (`!unbounded_below(c)`).
+bool includes_lower(Closure c);
+
+/// True when `c` includes its `upper` bound. Only meaningful when the closure is
+/// bounded above (`!unbounded_above(c)`).
+bool includes_upper(Closure c);
+
 /// A numeric range with an explicit closure.
 ///
 /// `float` rather than `double` deliberately: the whole transfer path and the
-/// GLSL helper are float, and CPU/GPU agreement at a boundary is exactly what
-/// the explicit closure exists to guarantee. Widening here would reintroduce
-/// disagreement at the one place we most want it gone. (Precision note: float
+/// GLSL helper are float, so keeping this float **preserves the option** of
+/// CPU/GPU agreement at a boundary. (Nothing enforces that agreement yet — the
+/// shader currently mirrors only `normalize()` and `apply_response()`, with no
+/// GLSL counterpart for closures or the breakpoint map. Widening here would
+/// foreclose parity at the one place we most want it.) Precision note: float
 /// resolves ~1 mm at 10 km, so survey depths and contour settings are
-/// comfortable; a domain needing more than ~7 significant digits is not.)
+/// comfortable; a domain needing more than ~7 significant digits is not.
 ///
 /// A single value is expressed as `ClosedInterval` with `lower == upper`.
 struct ValueRange
@@ -84,8 +94,11 @@ struct ValueRange
   /// unbounded range (a ramp needs two finite ends — see `LookupEntry`).
   float fraction(float value) const;
 
-  /// True when both ends are finite and `upper > lower`, i.e. this range can
-  /// carry a ramp rather than only a flat colour.
+  /// True when this range can carry a ramp rather than only a flat colour:
+  /// both ends finite, `upper > lower`, **and** the width itself finite. The
+  /// last condition matters — a range like `[-3e38, 3e38]` has finite ends and
+  /// positive width on paper, but `upper - lower` overflows to infinity and
+  /// every `fraction()` would collapse to 0, silently flattening the ramp.
   bool rampable() const;
 };
 
@@ -126,10 +139,15 @@ struct LookupEntry
 /// values that fall in a real gap.
 struct Sentinels
 {
-  /// Below every entry's domain. Unset resolves to the first entry's colour.
+  /// Below every entry's domain. Unset resolves to the colour of the entry
+  /// that *owns* the domain minimum — resolved by value, not by position in
+  /// the table, since entry order is precedence rather than sort order.
   std::optional<Rgba> under;
 
-  /// Above every entry's domain. Unset resolves to the last entry's colour.
+  /// Above every entry's domain. Unset resolves to the colour of the entry
+  /// that owns the domain maximum — its ramp end colour when that entry is
+  /// `rampable()`, otherwise its start colour. (A non-rampable entry never
+  /// renders its `end_color`, so the sentinel must not either.)
   std::optional<Rgba> over;
 
   /// Non-finite input (NaN / inf). Default fully transparent, matching
@@ -152,6 +170,16 @@ struct Sentinels
 /// Sentinel precedence, in order: non-finite input is `bad`; a value outside
 /// the whole domain is `under` / `over`; otherwise first match wins; a value
 /// inside the domain that no entry claims is `unmapped`.
+///
+/// "Outside the domain" respects the **closure of the extreme bounds**. On a
+/// contiguous S-102-style ladder of `GeLtInterval` bands, the topmost `upper`
+/// is *not* in the domain, so a value landing exactly on it is `over` — not
+/// `unmapped`. Getting that wrong renders a legal sounding as a transparent
+/// hole in the chart, since `unmapped` defaults to fully transparent.
+///
+/// The domain is indexed once at construction. `entries_` is immutable after
+/// that (only the sentinels can be replaced), so `lookup()` costs one pass
+/// rather than three.
 class LookupTable
 {
 public:
@@ -166,11 +194,18 @@ public:
 
   /// Lowest finite `lower` across all entries. Unset when the table is empty
   /// or any entry is unbounded below (in which case nothing is ever `under`).
-  std::optional<float> domain_min() const;
+  /// Entries whose range is empty (`upper < lower` on a bounded closure) are
+  /// skipped, matching `contains()`, which never claims a value for them.
+  std::optional<float> domain_min() const {return domain_min_;}
 
   /// Highest finite `upper` across all entries. Unset when the table is empty
-  /// or any entry is unbounded above.
-  std::optional<float> domain_max() const;
+  /// or any entry is unbounded above. Empty ranges are skipped, as above.
+  std::optional<float> domain_max() const {return domain_max_;}
+
+  /// Whether the domain includes its own minimum / maximum — true when *any*
+  /// entry sitting on that extreme includes the bound.
+  bool domain_min_inclusive() const {return domain_min_inclusive_;}
+  bool domain_max_inclusive() const {return domain_max_inclusive_;}
 
   /// Colour for `value`, following the precedence documented above. An empty
   /// table returns `sentinels().unmapped` for every finite input — a table
@@ -181,8 +216,17 @@ public:
   std::optional<std::size_t> match(float value) const;
 
 private:
+  void index_domain();
+
   std::vector<LookupEntry> entries_;
   Sentinels sentinels_;
+
+  std::optional<float> domain_min_;
+  std::optional<float> domain_max_;
+  bool domain_min_inclusive_{false};
+  bool domain_max_inclusive_{false};
+  std::size_t domain_min_entry_{0};  ///< entry owning domain_min_, when set
+  std::size_t domain_max_entry_{0};  ///< entry owning domain_max_, when set
 };
 
 /// A breakpoint anchoring an absolute data value to a position in normalized
@@ -226,8 +270,16 @@ public:
   BreakpointMap() = default;
 
   /// Build a map over `[lo, hi]`. Breakpoints may be supplied in any order and
-  /// may lie outside `[lo, hi]`; both are handled (sorted, then clamped).
-  /// An inverted `[lo, hi]` is swapped, matching `RangeModel::set_manual()`.
+  /// may lie outside `[lo, hi]`; both are handled (clamped, then sorted). An
+  /// inverted `[lo, hi]` is swapped, matching `RangeModel::set_manual()`.
+  ///
+  /// Infinite break values clamp to the nearer end — `+inf` onto `hi`, `-inf`
+  /// onto `lo` — so they behave like the very large finite values they stand
+  /// in for. Only NaN, which has no meaningful side, falls back to `lo`.
+  ///
+  /// A non-finite `lo` or `hi` is rejected: the domain resets to `[0, 1]`
+  /// rather than leaving a NaN readable through `lo()` / `hi()`. Consistent
+  /// with this class's posture that degenerate input clamps and never throws.
   BreakpointMap(float lo, float hi, std::vector<Breakpoint> breaks);
 
   float lo() const {return lo_;}

@@ -463,3 +463,190 @@ TEST(BreakpointMap, OutputIsAlwaysWithinUnitInterval)
     EXPECT_LE(t, 1.0f);
   }
 }
+
+// --- Regressions from the #13 adversarial review -----------------------------
+
+TEST(ValueRange, RampableRejectsOverflowingWidth)
+{
+  // Finite ends and positive width on paper, but upper - lower overflows, so
+  // every fraction() would collapse to 0 and flatten the ramp silently.
+  const ValueRange r{-3e38f, 3e38f, Closure::ClosedInterval};
+  EXPECT_FALSE(r.rampable());
+  EXPECT_FLOAT_EQ(0.0f, r.fraction(0.0f));
+}
+
+TEST(LookupTable, ValueOnAnExclusiveTopBoundIsOverNotUnmapped)
+{
+  // A contiguous S-102-style GeLt ladder. A sounding landing exactly on the
+  // topmost `upper` is outside the domain; reporting it as unmapped would
+  // render a legal depth as a transparent hole.
+  Sentinels s;
+  s.over = red();
+  s.unmapped = green();
+  const LookupTable t({
+    LookupEntry{"a", ValueRange{0.0f, 10.0f, Closure::GeLtInterval}, blue(), {}},
+    LookupEntry{"b", ValueRange{10.0f, 30.0f, Closure::GeLtInterval}, blue(), {}},
+    LookupEntry{"c", ValueRange{30.0f, 100.0f, Closure::GeLtInterval}, blue(), {}},
+  }, s);
+  ASSERT_TRUE(t.domain_max().has_value());
+  EXPECT_FLOAT_EQ(100.0f, *t.domain_max());
+  EXPECT_FALSE(t.domain_max_inclusive());
+  expect_color_eq(red(), t.lookup(100.0f));
+  expect_color_eq(blue(), t.lookup(99.999f));
+}
+
+TEST(LookupTable, ValueOnAnExclusiveBottomBoundIsUnderNotUnmapped)
+{
+  Sentinels s;
+  s.under = red();
+  s.unmapped = green();
+  const LookupTable t({
+    LookupEntry{"a", ValueRange{0.0f, 100.0f, Closure::GtLeInterval}, blue(), {}},
+  }, s);
+  EXPECT_FALSE(t.domain_min_inclusive());
+  expect_color_eq(red(), t.lookup(0.0f));
+  expect_color_eq(blue(), t.lookup(100.0f));  // upper IS included here
+}
+
+TEST(LookupTable, AnInclusiveNeighbourMakesTheExtremeInclusive)
+{
+  // One entry excludes the extreme, another sitting on it includes it.
+  const LookupTable t({
+    LookupEntry{"open", ValueRange{0.0f, 10.0f, Closure::GeLtInterval}, red(), {}},
+    LookupEntry{"closed", ValueRange{5.0f, 10.0f, Closure::ClosedInterval}, green(), {}},
+  });
+  EXPECT_TRUE(t.domain_max_inclusive());
+  expect_color_eq(green(), t.lookup(10.0f));  // claimed, not `over`
+}
+
+TEST(LookupTable, DomainReportsValuesAndIgnoresUnusedSemiIntervalBounds)
+{
+  // The GeSemi entry's `upper` is deliberate nonsense; it must not be read.
+  const LookupTable t({
+    LookupEntry{"low", ValueRange{-5.0f, 10.0f, Closure::GeLtInterval}, red(), {}},
+    LookupEntry{"high", ValueRange{10.0f, -999.0f, Closure::GeSemiInterval}, blue(), {}},
+  });
+  ASSERT_TRUE(t.domain_min().has_value());
+  EXPECT_FLOAT_EQ(-5.0f, *t.domain_min());
+  EXPECT_TRUE(t.domain_min_inclusive());
+  EXPECT_FALSE(t.domain_max().has_value());  // unbounded above
+}
+
+TEST(LookupTable, EmptyRangesDoNotContributeToTheDomain)
+{
+  const LookupTable t({
+    LookupEntry{"inverted", ValueRange{10.0f, 0.0f, Closure::ClosedInterval}, red(), {}},
+    LookupEntry{"real", ValueRange{20.0f, 30.0f, Closure::ClosedInterval}, blue(), {}},
+  });
+  ASSERT_TRUE(t.domain_min().has_value());
+  EXPECT_FLOAT_EQ(20.0f, *t.domain_min());
+  ASSERT_TRUE(t.domain_max().has_value());
+  EXPECT_FLOAT_EQ(30.0f, *t.domain_max());
+}
+
+TEST(LookupTable, UnderOverResolveByValueNotByTablePosition)
+{
+  // Entry order is precedence, not sort order: the deep band is listed first.
+  const LookupTable t({
+    LookupEntry{"deep", ValueRange{30.0f, 100.0f, Closure::GeLtInterval}, blue(), {}},
+    LookupEntry{"shallow", ValueRange{0.0f, 30.0f, Closure::GeLtInterval}, red(), {}},
+  });
+  expect_color_eq(red(), t.lookup(-1.0f));    // shallow owns the minimum
+  expect_color_eq(blue(), t.lookup(200.0f));  // deep owns the maximum
+}
+
+TEST(LookupTable, OverFallbackIgnoresAnEndColorTheEntryWouldNeverRender)
+{
+  // A non-rampable entry never renders its end_color, so the sentinel must not
+  // introduce a colour that appears nowhere else in the table.
+  const LookupTable t({
+    LookupEntry{"only", ValueRange{10.0f, 10.0f, Closure::ClosedInterval}, red(), green()},
+  });
+  expect_color_eq(red(), t.lookup(10.0f));
+  expect_color_eq(red(), t.lookup(11.0f));
+}
+
+TEST(BreakpointMap, InfiniteBreakValuesClampToTheNearerEnd)
+{
+  // +inf must behave like the very large finite value it stands in for.
+  const BreakpointMap high(0.0f, 10.0f, {Breakpoint{kInf, 0.5f}});
+  ASSERT_EQ(1u, high.breaks().size());
+  EXPECT_FLOAT_EQ(10.0f, high.breaks()[0].value);
+  EXPECT_FLOAT_EQ(0.5f, high.normalize(10.0f));
+
+  const BreakpointMap low(0.0f, 10.0f, {Breakpoint{-kInf, 0.5f}});
+  ASSERT_EQ(1u, low.breaks().size());
+  EXPECT_FLOAT_EQ(0.0f, low.breaks()[0].value);
+  EXPECT_FLOAT_EQ(0.5f, low.normalize(0.0f));
+}
+
+TEST(BreakpointMap, AnInfiniteBreakMatchesALargeFiniteOne)
+{
+  // The regression: these are semantically the same "break far above the data"
+  // case and must not produce opposite palette allocations.
+  const BreakpointMap inf_break(0.0f, 10.0f, {Breakpoint{kInf, 0.5f}});
+  const BreakpointMap big_break(0.0f, 10.0f, {Breakpoint{1e30f, 0.5f}});
+  for (float v = 0.0f; v <= 10.0f; v += 1.0f) {
+    EXPECT_FLOAT_EQ(big_break.normalize(v), inf_break.normalize(v)) << "at v=" << v;
+  }
+}
+
+TEST(BreakpointMap, NonFiniteDomainResetsRatherThanLeakingNaN)
+{
+  for (const auto & m : {BreakpointMap(kNaN, 10.0f, {}), BreakpointMap(0.0f, kNaN, {}),
+      BreakpointMap(-kInf, 10.0f, {})})
+  {
+    EXPECT_TRUE(std::isfinite(m.lo()));
+    EXPECT_TRUE(std::isfinite(m.hi()));
+    EXPECT_GT(m.hi(), m.lo());
+  }
+}
+
+TEST(BreakpointMap, OverflowingDomainWidthDoesNotSilentlyFlatten)
+{
+  const BreakpointMap m(-3e38f, 3e38f, {});
+  // Whatever it returns, it must stay in range and must not be NaN.
+  for (const float v : {-3e38f, -1e38f, 0.0f, 1e38f, 3e38f}) {
+    const float t = m.normalize(v);
+    EXPECT_FALSE(std::isnan(t));
+    EXPECT_GE(t, 0.0f);
+    EXPECT_LE(t, 1.0f);
+  }
+}
+
+TEST(BreakpointMap, MonotonicUnderAdversarialBreakSets)
+{
+  // The invariant lives here: many breaks, duplicates, crossing positions, and
+  // breaks on and outside both endpoints.
+  const std::vector<std::vector<Breakpoint>> cases = {
+    {},
+    {Breakpoint{-10.0f, 0.5f}},
+    {Breakpoint{0.0f, 0.5f}, Breakpoint{0.0f, 0.2f}},
+    {Breakpoint{-5.0f, 0.9f}, Breakpoint{5.0f, 0.1f}},
+    {Breakpoint{kInf, 0.3f}, Breakpoint{-kInf, 0.7f}, Breakpoint{kNaN, 0.5f}},
+    {Breakpoint{-10.0f, 0.0f}, Breakpoint{10.0f, 1.0f}},
+    {Breakpoint{-3.0f, 0.2f}, Breakpoint{-3.0f, 0.4f}, Breakpoint{-3.0f, 0.6f}},
+  };
+  for (std::size_t c = 0; c < cases.size(); ++c) {
+    const BreakpointMap m(-10.0f, 10.0f, cases[c]);
+    float previous = -1.0f;
+    for (float v = -12.0f; v <= 12.0f; v += 0.25f) {
+      const float t = m.normalize(v);
+      EXPECT_FALSE(std::isnan(t)) << "case " << c << " v=" << v;
+      EXPECT_GE(t, 0.0f) << "case " << c << " v=" << v;
+      EXPECT_LE(t, 1.0f) << "case " << c << " v=" << v;
+      EXPECT_GE(t, previous) << "case " << c << " v=" << v;
+      previous = t;
+    }
+  }
+}
+
+TEST(BreakpointMap, ClampedBreakPinsTheDiscontinuityAtTheEndpoint)
+{
+  // "No land in view": the break collapses onto hi, so the domain occupies
+  // [0, break position] and the remainder of the palette is unused.
+  const BreakpointMap m(-80.0f, -10.0f, {Breakpoint{0.0f, 0.5f}});
+  EXPECT_FLOAT_EQ(0.5f, m.normalize(-10.0f));
+  EXPECT_LT(m.normalize(-10.01f), 0.5f);
+  EXPECT_NEAR(0.5f, m.normalize(-10.01f), 0.02f);
+}
