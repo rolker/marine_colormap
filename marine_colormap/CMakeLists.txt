@@ -64,6 +64,12 @@ install(
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
 
+# Documentation tool: renders every registered palette to an SVG by walking the
+# live registry, so the committed chart cannot drift from the code. Not
+# installed -- it is a developer tool, run by docs/generate_palette_chart.sh.
+add_executable(palette_chart tools/palette_chart.cpp)
+target_link_libraries(palette_chart ${PROJECT_NAME})
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
