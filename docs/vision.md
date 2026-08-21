@@ -7,9 +7,9 @@ thread. Decisions get made in `docs/decisions/` as each area firms up, and where
 disagrees with this document, **the ADR wins** — this file gets updated to match.
 
 Umbrella issue: [#12](https://github.com/rolker/marine_colormap/issues/12). The prior-art
-survey behind most of the reasoning here lives in three comments on that issue (Colin
-Ware's work; fixed-domain and topo-bathy; format, editor and search path) — this document
-does not repeat them, it acts on them.
+survey behind most of the reasoning here lives in four comments on that issue (Colin
+Ware's work; fixed-domain and topo-bathy; format, editor and search path; and an addendum
+on where S-100 is heading) — this document does not repeat them, it acts on them.
 
 ## Where we are today
 
@@ -17,8 +17,10 @@ The library models exactly one kind of colormap: a **continuous ramp over an
 operator-adjustable range**. Six palettes (`grayscale`, `bronze`, `thermal`, `viridis`,
 `turbo`, `quality`) in a compiled-in, name-keyed, append-only registry; a fixed-order
 transfer function (normalize → gain → contrast/gamma → sample → alpha); an Auto/Manual
-`RangeModel`; a CPU `lookup()`; `bake_lut()` for the GPU path; a GLSL helper that mirrors
-the CPU math line for line; and one Qt widget, an interactive colorbar legend.
+`RangeModel`; a CPU `lookup()`; `bake_lut()` for the GPU path; a GLSL helper mirroring the
+CPU `normalize()` and `apply_response()` (palette sampling goes through the baked LUT
+texture, and the below-floor and no-data sentinels are left to the consumer's own shader);
+and one Qt widget, an interactive colorbar legend.
 
 Consumers: camp, marine_sonar_widgets, rqt_operator_tools (`rqt_sonar_waterfall`, with
 `rqt_marine_sonar` inheriting transitively), rviz_sonar_image, marine_perception_tools.
@@ -28,8 +30,10 @@ direction.
 
 ## The vision
 
-A layered system. Each layer depends only on the ones above it, and the top layer stays
-free of Qt, Ogre and GL so that every consumer — including headless tests — can use it.
+A layered system, listed roughly in dependency order below except for the last entry. The
+core stays free of Qt, Ogre and GL so that every consumer — including headless tests — can
+use it. (Policy and configuration is listed last because it arrives last, but it sits
+against the core model, not above the widgets — the UI tiers are thin skins over it.)
 
 **Core model (Qt-free).** Palette *kinds*: continuous ramps as today, plus **stepped** and
 **categorical/indexed** palettes. **Anchored breakpoints** — see below. Sentinel colours
@@ -64,9 +68,11 @@ workstation tool and must never appear in camp's or rviz's dependency chain.
 
 1. **Selector** — a small widget for client applications: choose a palette, adjust the
    basics *if the palette allows it*, with an "Advanced" button leading to tier 2. "If
-   allowed" is the fixed-domain policy surfacing in the UI, and the prior art is unanimous
-   that the controls should be **removed rather than greyed out** when a palette owns its
-   domain. An operator who can see a slider will eventually drag it.
+   allowed" is the fixed-domain policy surfacing in the UI, and every surveyed system that
+   has this case — ParaView, which hides its Mapping Data group, and Foxglove, which drops
+   the range controls for occupancy grids — **removes the controls rather than greying them
+   out** when a palette owns its domain. An operator who can see a slider will eventually
+   drag it.
 2. **Adjustment panel** — the fuller usage-side UI: range, breakpoints, transfer
    parameters, stepped-vs-smooth, colour-profile selection.
 3. **Authoring tool** — construct a new palette when none of the existing ones fit;
@@ -79,14 +85,16 @@ and drift, which is the duplication problem this library exists to solve.
 
 ### Legends, and the multi-layer problem
 
-camp has no legend display today, and the guts of one belong here rather than in camp. But
-camp's situation constrains the design in a way a single-view application does not:
+camp has no legend in the map view or the layer tree — its only legend today lives inside
+the modal "Colormap range…" dialog, which already hosts `ColormapLegendWidget`. The guts of
+a persistent legend belong here rather than in camp. But camp's situation constrains the
+design in a way a single-view application does not:
 **camp shows several layers at once, each with its own colormap and range, so one legend
 parked in a corner is ambiguous — it cannot say which layer it describes.**
 
 The shape that follows, borrowing from ParaView and QGIS:
 
-- **A compact ramp strip rendered per layer in the layer tree.** QGIS does this, and it is
+- **A compact ramp strip painted per layer in the layer tree.** QGIS does this, and it is
   the cheapest possible answer to "which layer is which colour" — always visible, always
   unambiguous, no extra chrome, and it cannot drift out of sync with the layer list.
 - **A per-layer "show legend" toggle** putting a full labelled legend on screen, with
@@ -98,11 +106,13 @@ The shape that follows, borrowing from ParaView and QGIS:
   the *display* surfaces.
 
 **The architectural consequence for this library is the important part: separate the
-painting from the widget.** A tree-item delegate cannot host a `QWidget`, so the ramp
-painter must be usable standalone — draw this palette, with this range, into this
-`QPainter` and rectangle — and the interactive `ColormapLegendWidget` becomes one consumer
-of that painter rather than the only way to draw a legend. Both are driven by the same
-model. If we build only a widget, camp cannot put a ramp in its layer tree.
+painting from the widget.** An item delegate paints; it should not own a `QWidget` per row.
+(`setIndexWidget` and persistent editors technically can, but the cost and lifetime
+management make that the wrong tool for a strip in every layer row.) So the ramp painter
+must be usable standalone — draw this palette, with this range, into this `QPainter` and
+rectangle — with the interactive `ColormapLegendWidget` as one consumer of that painter
+rather than the only way to draw a legend. Both are driven by the same model. If we build
+only a widget, camp has no reasonable way to put a ramp in its layer tree.
 
 Two further consequences. **Units and quantity labels stop being optional** once more than
 one legend is on screen — the operator has to be able to tell the metres from the decibels
@@ -123,15 +133,19 @@ to fill its share of the colour table.
 - **Fully anchored on both ends** is a fixed-domain palette — the costmap case — where
   there is no free range left for an operator to adjust.
 
-If that last equivalence holds, **Themes 1 and 2 of #12 are one mechanism, not two**, and
-we implement anchored breakpoints once. That is a hypothesis to test early, because it
-determines how the work splits.
+If that last equivalence holds, **Themes 1 and 2 of #12 — fixed-domain palettes and the
+topo-bathy pivot — are one mechanism, not two**, and we implement anchored breakpoints
+once. That is a hypothesis to test early, because it determines how the work splits.
 
-No surveyed system supports more than one hinge: GMT allows exactly one per CPT,
-matplotlib's `TwoSlopeNorm` has exactly one centre, and ParaView rescales control points
-proportionally, which would slide an anchored break off its data value. **This is our
-synthesis of GMT's hinge with S-52's mariner-configurable depth classes, not a borrow.**
-We own the edge cases.
+The **multi-break shape is borrowed, not invented**: S-100's coverage lookup is an ordered
+list of absolute-valued intervals, and the shipped S-102 catalogue uses three
+operator-settable breaks plus a break at zero. What is *not* available off the shelf is
+multi-break **pivot** behaviour — independently stretching each span to fill its share of
+the colour range. There, the surveyed systems stop at one: GMT allows exactly one hinge
+per CPT, matplotlib's `TwoSlopeNorm` has exactly one centre, and ParaView rescales control
+points proportionally, which would slide an anchored break off its data value. So the
+design is S-100's interval structure with GMT-style pivot semantics inside each span, and
+the edge cases of combining them are ours.
 
 **S-100 already specifies this shape, and we should adopt it** (see "Alignment with S-100"
 below). Its coverage portrayal model is an *ordered list of lookup entries, first match
@@ -162,23 +176,27 @@ The near-term driving requirement: a colormap with shoreline and safety-contour 
 used in camp **tide-aware** — shading computed against instantaneous water level rather
 than static chart datum.
 
-This is not a new idea here, and the lineage runs directly into the standard we are now
-borrowing from. **Brennan, Ware, Alexander, Armstrong, Mayer, Huff, Calder, Smith,
-Plumlee, Arsenault and Glang, "Electronic Chart of the Future: The Hampton Roads
+This is not a new idea here. **Brennan, Ware, Alexander, Armstrong, Mayer, Huff, Calder,
+Smith, Plumlee, Arsenault and Glang, "Electronic Chart of the Future: The Hampton Roads
 Demonstration Project" (US HYDRO 2003)** demonstrated tide-aware, time-aware depth display
-treating chart datum as a live quantity. Chart of the Future was a **forward-looking
-research project intended to inform the development of S-100** — so the S-98 Appendix D
-water-level-adjustment machinery described below is downstream of that work rather than
-a separate tradition. We are not adopting a foreign model; we are picking up a thread this
-group helped start.
+treating chart datum as a live quantity — roughly a decade before S-98 made the same idea
+normative.
+
+Per Roland Arsenault, a co-author, Chart of the Future was a forward-looking research
+project whose aim was to inform the development of S-100. That is a participant's account
+of the project's intent; this survey did not establish a documented causal line from it to
+S-98 Appendix D, and the document does not claim one. The practical point stands either
+way: the model below should feel familiar rather than foreign.
 
 `s57_tools` already applies a tide-offset correction for chart display, so tide plumbing
 likely exists to reuse rather than build.
 
 **It is also now normative IHO practice, which gives us a model to follow.** S-98 Edition
-2.0.0 (October 2025), Appendix D, specifies **Water Level Adjustment** as mandatory on
-S-100 ECDIS: *"The functionality and portrayal of the safety contour, depth zone shades,
-safety depth and indication of isolated dangers must use the adjusted depth."*
+2.0.0 (October 2025), Appendix D, is mandatory for S-100 ECDIS to implement. Within it,
+**Water Level Adjustment** is an operator-selectable function — off by default, with
+permanent on-screen indication while active — and when it is on: *"The functionality and
+portrayal of the safety contour, depth zone shades, safety depth and indication of isolated
+dangers must use the adjusted depth."*
 
 The important architectural lesson is **how** they do it: WLA adjusts the *depth values*
 by the water level and then applies the **unchanged** portrayal. Tide-awareness is a
@@ -189,9 +207,8 @@ stable across a tide cycle, and it aligns with the standard.
 Their conservatism is worth borrowing wholesale for a robot boat: **shoalest wins** when
 several cells or two adjacent time steps could apply, **nearest-neighbour rather than
 interpolation** between grid values, and **refuse to adjust outside the water-level
-temporal extent** rather than extrapolating. Defaults matter too — S-98 has the enhanced
-safety contour on by default and water-level adjustment *off* by default, with a permanent
-on-screen indication whenever it is active.
+temporal extent** rather than extrapolating. Their defaults are worth copying too: the
+enhanced safety contour is on by default, while water-level adjustment is opt-in.
 
 ### Alignment with S-100
 
@@ -226,16 +243,19 @@ Four consequences for us:
   That is open territory, and it is where [camp#145](https://github.com/rolker/camp/issues/145)
   (defaulting an uncertainty band to the `quality` ramp) is heading anyway.
 - **Interpolating ramps in CIE xyY, component-wise including alpha, is the normative S-100
-  rule.** We interpolate in sRGB today. Adopting xyY would be both a defensible perceptual
-  choice and a citable one — worth deciding deliberately rather than by default.
+  rule.** We interpolate in sRGB today. Note that xyY is *not* a perceptually uniform
+  space, so this is a **conformance** argument rather than a perceptual upgrade — and it
+  sits awkwardly beside this document's own insistence on L\*-modulated shading and ΔE
+  metrics. Worth deciding deliberately rather than by default.
 
 **Licensing: load catalogues at runtime; do not vendor IHO colour tables.** IHO
 publications are copyright IHO with commercial exploitation requiring written permission,
 and the IHO GitHub repositories almost all carry no licence file at all, which means all
 rights reserved. Runtime loading is also architecturally cleaner and mirrors how S-100
-itself separates catalogues from software — an S-102 portrayal catalogue is five files and
-trivially loadable. Note also that the S-52 Annex A:100 presentation library for S-100
-ECDIS is **not** publicly available; it ships only under the S-100 Security Scheme.
+itself separates catalogues from software — an S-102 portrayal catalogue is a handful of
+Lua rules plus one colour-profile XML, and is trivially loadable. Note also that the S-52
+Annex A:100 presentation library for S-100 ECDIS is **not** publicly available; it ships
+only under the S-100 Security Scheme.
 
 Timeline, for context: S-100 ECDIS became voluntary on 1 January 2026 and is mandated for
 new installations from 1 January 2029. The data models are stable and shipping; the
@@ -255,7 +275,11 @@ step belongs here:
 
 - Composing a scalar value and a shade factor into a final colour must happen in a
   **perceptual space — modulating L\***, not multiplying RGB, which darkens *and*
-  desaturates. This is the most common way shaded colour maps are gotten wrong.
+  desaturates. This is the most common way shaded colour maps are gotten wrong. The
+  principle is Kovesi's: *"to achieve the perception of a coloured surface being shaded the
+  luminance of the colours need to be modulated by the relief shading"*
+  ([arXiv:1509.03700](https://arxiv.org/abs/1509.03700)) — frequently misattributed to
+  Ware, so cite it correctly.
 - It enters the transfer pipeline as a **defined stage at a defined position**, and is
   mirrored in the GLSL helper so CPU and GPU agree.
 - Palettes declare whether they have left **luminance headroom** for draping. A palette
@@ -306,6 +330,13 @@ than import-only, accepting lossiness for multi-break palettes. `.cpt` is what t
 hydrographic world speaks and the only common format carrying an absolute z-range with a
 hinge.
 
+**A tension to resolve at step 6, not to discover then**: the model we are adopting is
+interval-and-closure based precisely because a plain stop list cannot express a hard
+discontinuity — but ParaView's `RGBPoints`, the leading native-format candidate, *is* a
+stop list. Coincident stops and a namespaced extension can carry the breaks, but how
+cleanly a candidate format represents a discontinuity should be an explicit criterion when
+the format is chosen, not an afterthought.
+
 The stop-based-versus-segment-based question that would otherwise precede any parser is
 **settled by adopting S-100's lookup-entry shape**: a list of intervals with explicit
 closures *is* a segment model, and it expresses a hard discontinuity natively — which a
@@ -319,7 +350,7 @@ package. Clean sources are Crameri's Scientific Colour Maps (MIT — `oleron`, `
 Thyng's cmocean (MIT — including a hinged `topo`), viridis (CC0), ColorBrewer
 (Apache-style, with an acknowledgement string), and ParaView's presets (BSD-3).
 
-Search path, highest precedence first: `$MARINE_COLORMAP_PATH` → `$XDG_DATA_HOME` → 
+Search path, highest precedence first: `$MARINE_COLORMAP_PATH` → `$XDG_DATA_HOME` →
 `$XDG_DATA_DIRS` → package-contributed palettes via `ament_index` → compiled-in.
 **Merge across names, first-wins per name.** There is **no existing ROS 2 convention for
 user-overridable resources** — we are establishing local convention, and the ADR should
@@ -355,8 +386,10 @@ Things that must survive every change below:
 - **The built-in registry stays append-only and name-keyed**, because consumers persist
   selections by name. User-supplied palettes must not be able to break that guarantee for
   built-ins — shadowing policy is an open decision, not an accident.
-- **GPU parity is not optional.** Anything the CPU path can express, the GLSL helper must
-  express identically. The likely mechanism for anchored breaks: keep the baked LUT
+- **GPU parity is a goal we are adopting, not a property we already have.** Today the GLSL
+  helper covers normalize and response only, and sentinel handling is the consumer's job —
+  so this is a gap to close as the model grows, and new capability should not widen it. The
+  likely mechanism for anchored breaks: keep the baked LUT
   uniform in *normalized* space as today, and do the piecewise data-to-normalized mapping
   in the shader with break positions as uniforms — which also means dragging a safety
   contour needs no LUT re-bake.
@@ -379,9 +412,10 @@ versus sRGB interpolation, legend placement specifics in camp, and where the aut
 lives.
 
 **None of the open items blocks step 1**, because step 1 is an in-memory model with no file
-format, no UI and no persistence. They become blocking at step 6, by which point the model
-will have taught us things that ought to inform them anyway. That is the argument for
-starting now rather than deciding everything first.
+format, no UI and no persistence. Legend placement becomes blocking at step 5; the format,
+interpolation-space and shadowing questions at step 6; and the authoring tool's home at
+step 8. By the time each bites, the model will have taught us things that ought to inform
+it anyway. That is the argument for starting now rather than deciding everything first.
 
 ## Sequencing
 
@@ -442,7 +476,9 @@ Full citations are in the prior-art comments on
   *IEEE TVCG* 24(1), 923–933.
 - Ware, Samsel, Rogers, Navratil, Mohammed (2020). "Designing Pairs of Colormaps for
   Visualizing Bivariate Scalar Fields." *EuroVis Short Papers*.
-- Ware, Stone, Szafir (2023). "Rainbow Colormaps Are Not All Bad." *IEEE CG&A* 43(3).
+- Ware, Stone & Szafir (2023). "Rainbow Colormaps Are Not All Bad." *IEEE CG&A* 43(3),
+  88–93. (Crossref lists three authors; some indexes add T.-M. Rhyne — check before citing
+  formally.)
 - Ware, Mayer, Johnson, Jakobsson, Ferrini (2020). "A global geographic grid system for
   visualizing bathymetry." *GI* 9(2), 375–384.
 - Brennan, Ware, … Arsenault, Glang (2003). "Electronic Chart of the Future: The Hampton
