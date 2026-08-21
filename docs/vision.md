@@ -293,6 +293,54 @@ with perception of surface shape — means **stepped-versus-smooth is a per-view
 toggle, not a build-time palette property**. The same colormap object serves "read the
 depth here" and "see the morphology" modes, and the right answer differs.
 
+### State modulation: dimming and highlighting
+
+A colormapped item should be able to render **dimmed** or **highlighted**. Two motivating
+cases, both real:
+
+- **Selection** — indicating which surface or layer is currently selected.
+- **LOD staleness** — an LOD-capable display showing coarse tiles while fine data loads can
+  dim the temporary tiles, hinting to the operator that what they're looking at is not the
+  final answer yet.
+
+This is **the same mechanism as the shading seam above**: take the colour a palette
+produced and modulate it by a scalar factor. Shading's factor comes from a light model;
+this one comes from item state. That argues for generalising the composition stage from
+"shading" to **state modulation**, with shading as one contributor — and it means the two
+must compose, since a coarse tile can also be hill-shaded.
+
+**The obvious implementation is the wrong one.** Dimming by reducing luminance fails twice
+over:
+
+- **Ware's own data says use saturation, not lightness.** The bivariate study (Ware, Samsel,
+  Rogers, Navratil, Mohammed, EuroVis 2020) tested exactly foreground-versus-background
+  separation and found saturation separation gave the lowest error (0.072, against 0.087 for
+  light/dark and 0.090 for hue), with high-saturation-over-low-saturation scoring 4.65 for
+  pattern clarity against 1.37 for light-on-dark. **Light/dark was the worst of the three
+  strategies tested.** So *recede* should mean desaturate, and *stand out* should mean raise
+  saturation.
+- **Luminance dimming silently no-ops at night.** In the S-102 night palette deep water is
+  already at L = 0 — literal black. You cannot darken black. A modulation defined only in
+  luminance would work by day, do nothing at night, and give an operator no staleness hint
+  in exactly the conditions where they are most reliant on the display.
+
+Highlighting has a further problem: brightening runs straight into the **luminance headroom**
+constraint already noted for draping. A palette using the full luminance range has nothing
+left to brighten with. Saturation avoids that, and an outline or border remains available as
+a non-colour channel.
+
+Note this converges with something the vision already contemplates. Ware's own bathymetry
+practice in GGGS uses **high saturation for measured multibeam and low saturation for
+predicted or interpolated background**, with unmapped areas in dark grey. "Dim the coarse
+tiles" is the same idea — **saturation encoding data quality or confidence** — arriving from
+a different direction. Worth treating them as one concept rather than two features.
+
+Design questions for later: whether state is a single combined factor supplied by the
+consumer or a set of named contributors the library composes; whether a dimmed layer's
+legend swatch dims with it (probably yes, for consistency); and whether dimming alone is a
+strong enough channel to carry "this data is provisional" on a safety-relevant display, or
+whether it should be a hint accompanying something more explicit.
+
 ### Colour profiles (day / dusk / night)
 
 S-52 ships five palettes, but **every S-100 portrayal catalogue actually shipped uses
@@ -436,8 +484,8 @@ Ordered so each step is independently useful and derisks the next.
    palettes. camp is the driving consumer — it has no legend at all today.
 6. **File loading**: format decision + ADR, search path, registry with provenance and
    reload.
-7. **Shading composition** in the transfer pipeline, CPU and GLSL, coordinated with
-   unh_marine_autonomy#326.
+7. **Composition stage** in the transfer pipeline, CPU and GLSL: shading, plus state
+   modulation for dim and highlight. Coordinated with unh_marine_autonomy#326.
 8. **Authoring tool**, last — by then the model, I/O and validation metrics all exist and
    the tool is largely assembly.
 
@@ -452,6 +500,8 @@ come from configuration.
 - Shadowing policy for user palettes over built-ins: forbidden, warned, or namespaced?
 - Legend placement in camp: ramp strips in the layer tree, pinned legends in the view, a
   dock, or some combination — and what the default is on a busy chart.
+- State modulation: one combined factor from the consumer, or named contributors the
+  library composes? And is dimming a strong enough channel on its own for provisional data?
 - A multi-break legend needs non-linear tick placement and break markers; are the break
   markers draggable in the compact form, or only in the expanded one?
 - What does a consumer do when a persisted palette name is no longer installed? Silently
