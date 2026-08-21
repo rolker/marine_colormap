@@ -36,21 +36,61 @@ struct ColorStop
 /// A named colormap: an ordered list of stops, sampled by piecewise-linear
 /// interpolation. Stop positions are explicit so non-uniform ramps are
 /// expressible; the built-ins are evenly spaced.
+/// Optional metadata describing the data domain a palette was designed for.
+///
+/// Most palettes have none — a sonar ramp is meaningful over whatever range the
+/// operator picks. A topo-bathy palette is different: its colors mean specific
+/// elevations, and its shoreline sits at a specific place in the color range.
+/// Without this, every consumer would hard-code "the shoreline of `oleron` is at
+/// 0.5", which is exactly the duplication this library exists to remove.
+struct PaletteDomain
+{
+  /// The elevation range the colors were designed against, in metres, positive
+  /// up — set only when the palette actually has one, and both bounds together.
+  /// `hypsometric` does (its stops are literal elevations); `oleron` does not,
+  /// being a stretchable master normalized to +/-1 and meaningful over any
+  /// range. Use it as a natural default range, or to render at true scale.
+  std::optional<float> natural_min;
+  std::optional<float> natural_max;
+
+  /// Where the land/sea transition sits in normalized color space, if the
+  /// palette has one. Anchor this to a data value with `BreakpointMap` to make
+  /// the shoreline land on the right depth (see `lookup.hpp`).
+  std::optional<float> shoreline_position;
+
+  /// True when both natural bounds are present and ordered.
+  bool has_natural_range() const
+  {
+    return natural_min && natural_max && *natural_max > *natural_min;
+  }
+};
+
 class Palette
 {
 public:
   Palette(std::string name, std::vector<ColorStop> stops);
+  Palette(std::string name, std::vector<ColorStop> stops, PaletteDomain domain);
 
   const std::string & name() const {return name_;}
   const std::vector<ColorStop> & stops() const {return stops_;}
 
+  /// The domain this palette was designed for, when it has one. Unset for the
+  /// general-purpose ramps, which are meaningful over any range.
+  const std::optional<PaletteDomain> & domain() const {return domain_;}
+
   /// Color at normalized position `t` (clamped to [0, 1]). Values at or beyond
   /// the end stops return those stops' colors.
+  ///
+  /// Two stops sharing the same `t` express a **hard discontinuity**: `sample()`
+  /// returns the lower stop's color exactly at `t` and interpolates from the
+  /// upper stop just above it. That matches the `GeLtInterval` convention in
+  /// `lookup.hpp`, where the lower band owns the boundary.
   Rgba sample(float t) const;
 
 private:
   std::string name_;
   std::vector<ColorStop> stops_;
+  std::optional<PaletteDomain> domain_;
 };
 
 // --- Built-in palette registry ---------------------------------------------
