@@ -30,6 +30,7 @@ add_library(${PROJECT_NAME} SHARED
   src/transfer.cpp
   src/colormap.cpp
   src/lookup.cpp
+  src/topobathy_palettes.cpp
   src/shader.cpp)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -39,6 +40,16 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 install(
   DIRECTORY include/
   DESTINATION include)
+
+# Ship the licence and the third-party notices with the installed package. MIT
+# requires its permission notice to accompany redistributed copies, and a binary
+# install is a redistribution -- leaving these in the source tree only would be
+# a compliance gap for anyone consuming the built package.
+install(
+  FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../THIRD_PARTY_NOTICES.md"
+  DESTINATION share/${PROJECT_NAME})
 install(
   TARGETS ${PROJECT_NAME}
   EXPORT export_${PROJECT_NAME}
@@ -57,7 +68,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 
   find_package(ament_cmake_gtest REQUIRED)
-  foreach(test_name palette transfer colormap shader lookup)
+  foreach(test_name palette transfer colormap shader lookup topobathy)
     ament_add_gtest(test_${test_name} test/test_${test_name}.cpp)
     target_link_libraries(test_${test_name} ${PROJECT_NAME})
   endforeach()
