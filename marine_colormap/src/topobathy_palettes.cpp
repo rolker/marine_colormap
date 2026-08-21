@@ -38,9 +38,10 @@ Rgba rgb8(int r, int g, int b)
 // ---------------------------------------------------------------------------
 // oleron -- Fabio Crameri's Scientific Colour Maps, v8.0.0.
 //
-// License: MIT License
-// Copyright (c) 2023, Fabio Crameri.
-// Crameri, F. (2023). Scientific colour maps. Zenodo.
+// License: MIT (Expat). Copyright (c) 2023, Fabio Crameri.
+// The full MIT permission notice and warranty disclaimer -- which the licence
+// requires to accompany redistributed copies -- is in THIRD_PARTY_NOTICES.md at
+// the repo root. Cite as: Crameri, F. (2023). Scientific colour maps. Zenodo.
 //   https://doi.org/10.5281/zenodo.1243862
 // Rationale: Crameri, Shephard & Heron (2020), "The misuse of colour in science
 //   communication", Nature Communications 11:5444.
@@ -324,7 +325,8 @@ std::vector<ColorStop> oleron_stops()
 // Transcribed from GeoZui4D's default colour lookup table
 // (`GeoZui4D/main/engine/TextureMaps/Clut.cpp`, `Clut::CreateDefault()`),
 // Copyright 2000-2026 Center for Coastal and Ocean Mapping, University of New
-// Hampshire, Apache-2.0 -- the same licence as this package.
+// Hampshire, Apache-2.0 -- the same licence as this package. See
+// THIRD_PARTY_NOTICES.md.
 //
 // Chosen over vendoring GMT's `globe`, which is the usual source for this look
 // but is LGPL-3+ and so cannot be shipped in an Apache-2.0 package.

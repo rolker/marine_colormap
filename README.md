@@ -33,4 +33,9 @@ The widget test runs headless under the offscreen Qt platform plugin
 
 ## License
 
-Apache-2.0.
+Apache-2.0 — see [`LICENSE`](LICENSE).
+
+Some palette data is vendored from third parties under their own licences (Crameri's
+Scientific Colour Maps under MIT, matplotlib's perceptual colormaps, and GeoZui4D's
+hypsometric table). Their notices and full terms are in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
