@@ -29,6 +29,7 @@ add_library(${PROJECT_NAME} SHARED
   src/perceptual_palettes.cpp
   src/transfer.cpp
   src/colormap.cpp
+  src/lookup.cpp
   src/shader.cpp)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -56,7 +57,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 
   find_package(ament_cmake_gtest REQUIRED)
-  foreach(test_name palette transfer colormap shader)
+  foreach(test_name palette transfer colormap shader lookup)
     ament_add_gtest(test_${test_name} test/test_${test_name}.cpp)
     target_link_libraries(test_${test_name} ${PROJECT_NAME})
   endforeach()
