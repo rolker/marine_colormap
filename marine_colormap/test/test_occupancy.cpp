@@ -181,8 +181,10 @@ TEST(OccupancyCostmap, NoNewMachineryWasNeededForAFixedDomain)
   for (const int v : {-128, -1, 0, 50, 99, 100, 127}) {
     const Rgba a = t.lookup(static_cast<float>(v));
     const Rgba b = copy.lookup(static_cast<float>(v));
-    EXPECT_FLOAT_EQ(a.r, b.r);
-    EXPECT_FLOAT_EQ(a.a, b.a);
+    EXPECT_FLOAT_EQ(a.r, b.r) << "R at " << v;
+    EXPECT_FLOAT_EQ(a.g, b.g) << "G at " << v;
+    EXPECT_FLOAT_EQ(a.b, b.b) << "B at " << v;
+    EXPECT_FLOAT_EQ(a.a, b.a) << "A at " << v;
   }
 }
 
