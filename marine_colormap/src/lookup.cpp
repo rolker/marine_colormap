@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <utility>
 
 namespace marine_colormap
@@ -110,12 +111,40 @@ Rgba LookupEntry::color_at(float value) const
 namespace
 {
 
-/// True when a bounded range is empty (`upper < lower`), so it can never claim
-/// a value and must not contribute to the domain. Consistent with contains().
-bool empty_range(const ValueRange & r)
+/// True when a range can never contain any finite value, so it must not
+/// contribute to the domain. This has to agree with `contains()` exactly: an
+/// entry that never matches but still shapes the domain routes below/above
+/// values to `unmapped` instead of `under`/`over`, which renders them as
+/// transparent holes.
+///
+/// The cases that are easy to miss:
+/// - `upper == lower` is empty for Open/GeLt/GtLe (they need positive width)
+///   but *not* for Closed, which is how a single value is expressed.
+/// - A NaN in a bound the closure actually uses makes every comparison false.
+/// - An **excluding infinity** in a used bound empties the range whatever the
+///   closure: no finite value is `>= +inf`, and none is `<= -inf`. So
+///   `[+inf, +inf]` matches nothing, while `[-inf, +inf]` matches everything —
+///   the difference is which end the infinity sits on, not the closure.
+bool never_matches(const ValueRange & r)
 {
-  if (unbounded_below(r.closure) || unbounded_above(r.closure)) {return false;}
-  return r.upper < r.lower;
+  constexpr float kInfinity = std::numeric_limits<float>::infinity();
+  const bool lower_used = !unbounded_below(r.closure);
+  const bool upper_used = !unbounded_above(r.closure);
+
+  if (lower_used && std::isnan(r.lower)) {return true;}
+  if (upper_used && std::isnan(r.upper)) {return true;}
+
+  // An excluding infinity empties the range regardless of the other bound.
+  if (lower_used && r.lower == kInfinity) {return true;}
+  if (upper_used && r.upper == -kInfinity) {return true;}
+
+  if (lower_used && upper_used) {
+    return (r.closure == Closure::ClosedInterval) ? (r.upper < r.lower) : !(r.upper > r.lower);
+  }
+  // A semi-interval whose single bound is the *including* infinity matches
+  // every finite value, so it is not empty — and it is genuinely unbounded,
+  // which index_domain() handles separately.
+  return false;
 }
 
 }  // namespace
@@ -140,7 +169,7 @@ void LookupTable::index_domain()
   bool ceilinged = true;
   for (std::size_t i = 0; i < entries_.size(); ++i) {
     const auto & r = entries_[i].range;
-    if (empty_range(r)) {continue;}
+    if (never_matches(r)) {continue;}
 
     // Unbounded below means nothing is ever `under`: the domain has no floor.
     if (unbounded_below(r.closure) || !std::isfinite(r.lower)) {

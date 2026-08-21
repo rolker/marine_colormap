@@ -650,3 +650,151 @@ TEST(BreakpointMap, ClampedBreakPinsTheDiscontinuityAtTheEndpoint)
   EXPECT_LT(m.normalize(-10.01f), 0.5f);
   EXPECT_NEAR(0.5f, m.normalize(-10.01f), 0.02f);
 }
+
+// --- Regressions from Copilot's review of PR #16 -----------------------------
+
+TEST(LookupTable, NeverMatchingEntriesDoNotShapeTheDomain)
+{
+  // A degenerate GeLt band ([50,50)) can never contain anything, so it must not
+  // stretch the domain. If it did, a value of 20 would fall "inside" [0,50) with
+  // no match and route to unmapped — a transparent hole where `over` belongs.
+  Sentinels s;
+  s.over = red();
+  s.unmapped = green();
+  const LookupTable t({
+    LookupEntry{"real", ValueRange{0.0f, 10.0f, Closure::GeLtInterval}, blue(), {}},
+    LookupEntry{"degenerate", ValueRange{50.0f, 50.0f, Closure::GeLtInterval}, blue(), {}},
+  }, s);
+  ASSERT_TRUE(t.domain_max().has_value());
+  EXPECT_FLOAT_EQ(10.0f, *t.domain_max());
+  expect_color_eq(red(), t.lookup(20.0f));
+}
+
+TEST(LookupTable, ZeroWidthIsEmptyForOpenClosuresButNotForClosed)
+{
+  // Consistency with contains(): [x,x] is how a single value is expressed, but
+  // (x,x), [x,x) and (x,x] can never match.
+  for (const auto c :
+    {Closure::OpenInterval, Closure::GeLtInterval, Closure::GtLeInterval})
+  {
+    const ValueRange r{5.0f, 5.0f, c};
+    EXPECT_FALSE(r.contains(5.0f)) << "closure " << static_cast<int>(c);
+    const LookupTable t({
+      LookupEntry{"real", ValueRange{0.0f, 1.0f, Closure::ClosedInterval}, blue(), {}},
+      LookupEntry{"degenerate", r, red(), {}},
+    });
+    ASSERT_TRUE(t.domain_max().has_value()) << "closure " << static_cast<int>(c);
+    EXPECT_FLOAT_EQ(1.0f, *t.domain_max()) << "closure " << static_cast<int>(c);
+  }
+  // Closed is a genuine single value and does shape the domain.
+  const LookupTable closed({
+    LookupEntry{"real", ValueRange{0.0f, 1.0f, Closure::ClosedInterval}, blue(), {}},
+    LookupEntry{"single", ValueRange{5.0f, 5.0f, Closure::ClosedInterval}, red(), {}},
+  });
+  ASSERT_TRUE(closed.domain_max().has_value());
+  EXPECT_FLOAT_EQ(5.0f, *closed.domain_max());
+  expect_color_eq(red(), closed.lookup(5.0f));
+}
+
+TEST(LookupTable, NaNBoundsDoNotUnsetTheDomain)
+{
+  // A NaN in a used bound makes every comparison false, so the entry can never
+  // match. It must be skipped, not allowed to remove the floor and ceiling and
+  // strand below/above values on unmapped.
+  Sentinels s;
+  s.under = red();
+  s.over = green();
+  s.unmapped = blue();
+  const LookupTable t({
+    LookupEntry{"real", ValueRange{0.0f, 10.0f, Closure::GeLtInterval}, blue(), {}},
+    LookupEntry{"nan_lo", ValueRange{kNaN, 10.0f, Closure::GeLtInterval}, blue(), {}},
+    LookupEntry{"nan_hi", ValueRange{0.0f, kNaN, Closure::GeLtInterval}, blue(), {}},
+  }, s);
+  ASSERT_TRUE(t.domain_min().has_value());
+  EXPECT_FLOAT_EQ(0.0f, *t.domain_min());
+  ASSERT_TRUE(t.domain_max().has_value());
+  EXPECT_FLOAT_EQ(10.0f, *t.domain_max());
+  expect_color_eq(red(), t.lookup(-1.0f));
+  expect_color_eq(green(), t.lookup(11.0f));
+}
+
+TEST(LookupTable, SemiIntervalsAtTheExcludingInfinityAreEmpty)
+{
+  // [+inf, ...) and (..., -inf) match no finite value, so they must not make the
+  // domain look unbounded.
+  Sentinels s;
+  s.under = red();
+  s.over = green();
+  const LookupTable t({
+    LookupEntry{"real", ValueRange{0.0f, 10.0f, Closure::GeLtInterval}, blue(), {}},
+    LookupEntry{"none_above", ValueRange{kInf, 0.0f, Closure::GeSemiInterval}, blue(), {}},
+    LookupEntry{"none_below", ValueRange{0.0f, -kInf, Closure::LtSemiInterval}, blue(), {}},
+  }, s);
+  EXPECT_TRUE(t.domain_min().has_value());
+  EXPECT_TRUE(t.domain_max().has_value());
+  expect_color_eq(red(), t.lookup(-1.0f));
+  expect_color_eq(green(), t.lookup(11.0f));
+}
+
+TEST(LookupTable, AGenuinelyUnboundedSemiIntervalStillRemovesTheBound)
+{
+  // The inverse check: a real unbounded band must still clear the ceiling.
+  const LookupTable t({
+    LookupEntry{"real", ValueRange{0.0f, 10.0f, Closure::GeLtInterval}, blue(), {}},
+    LookupEntry{"deep", ValueRange{10.0f, 0.0f, Closure::GeSemiInterval}, red(), {}},
+  });
+  EXPECT_TRUE(t.domain_min().has_value());
+  EXPECT_FALSE(t.domain_max().has_value());
+  expect_color_eq(red(), t.lookup(1e6f));
+}
+
+TEST(LookupTable, InfiniteSingletonsAreEmptyButFullSpanIsNot)
+{
+  // [+inf, +inf] and [-inf, -inf] match no finite value, so they must not clear
+  // the domain bounds and strand under/over. [-inf, +inf] matches everything and
+  // legitimately does clear them.
+  Sentinels s;
+  s.under = red();
+  s.over = green();
+
+  const LookupTable bounded({
+    LookupEntry{"real", ValueRange{0.0f, 10.0f, Closure::ClosedInterval}, blue(), {}},
+    LookupEntry{"top", ValueRange{kInf, kInf, Closure::ClosedInterval}, blue(), {}},
+    LookupEntry{"bottom", ValueRange{-kInf, -kInf, Closure::ClosedInterval}, blue(), {}},
+  }, s);
+  ASSERT_TRUE(bounded.domain_min().has_value());
+  EXPECT_FLOAT_EQ(0.0f, *bounded.domain_min());
+  ASSERT_TRUE(bounded.domain_max().has_value());
+  EXPECT_FLOAT_EQ(10.0f, *bounded.domain_max());
+  expect_color_eq(red(), bounded.lookup(-1.0f));
+  expect_color_eq(green(), bounded.lookup(11.0f));
+
+  const LookupTable spanning({
+    LookupEntry{"all", ValueRange{-kInf, kInf, Closure::ClosedInterval}, blue(), {}},
+  }, s);
+  EXPECT_FALSE(spanning.domain_min().has_value());
+  EXPECT_FALSE(spanning.domain_max().has_value());
+  expect_color_eq(blue(), spanning.lookup(-1e30f));
+  expect_color_eq(blue(), spanning.lookup(1e30f));
+}
+
+TEST(LookupTable, ExcludingInfinityEmptiesAnyClosure)
+{
+  // The rule is about which end the infinity sits on, not the closure.
+  for (const auto c :
+    {Closure::ClosedInterval, Closure::OpenInterval, Closure::GeLtInterval,
+      Closure::GtLeInterval})
+  {
+    const ValueRange lo_inf{kInf, kInf, c};
+    const ValueRange hi_ninf{-kInf, -kInf, c};
+    EXPECT_FALSE(lo_inf.contains(1.0f)) << "closure " << static_cast<int>(c);
+    EXPECT_FALSE(hi_ninf.contains(1.0f)) << "closure " << static_cast<int>(c);
+    const LookupTable t({
+      LookupEntry{"real", ValueRange{0.0f, 10.0f, Closure::ClosedInterval}, blue(), {}},
+      LookupEntry{"lo", lo_inf, red(), {}},
+      LookupEntry{"hi", hi_ninf, red(), {}},
+    });
+    EXPECT_TRUE(t.domain_min().has_value()) << "closure " << static_cast<int>(c);
+    EXPECT_TRUE(t.domain_max().has_value()) << "closure " << static_cast<int>(c);
+  }
+}
