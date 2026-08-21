@@ -27,6 +27,7 @@
 #include <cstdio>
 #include <iomanip>
 #include <iostream>
+#include <locale>
 #include <ostream>
 #include <sstream>
 #include <string>
@@ -57,12 +58,34 @@ std::string hex(const marine_colormap::Rgba & c)
 
 /// Alpha matters: the costmap's free-space entry is fully transparent, and a
 /// chart that painted it opaque would misdescribe the palette.
+///
+/// The stream is imbued with the classic locale because SVG requires '.' as the
+/// decimal separator. A default-constructed stream follows the global locale,
+/// so under e.g. de_DE this would emit `fill-opacity="0,502"` and produce an
+/// invalid document. Same reason the geometry stream is imbued in main().
 std::string alpha_attr(const marine_colormap::Rgba & c)
 {
   if (c.a >= 0.999f) {return std::string();}
   std::ostringstream os;
+  os.imbue(std::locale::classic());
   os << " fill-opacity=\"" << std::fixed << std::setprecision(3) << c.a << "\"";
   return os.str();
+}
+
+/// One block of a swatch. Boundaries are computed from the block index so
+/// adjacent blocks abut exactly and the last one lands on the ramp's right edge
+/// instead of overshooting the border. A hairline overlap is added between
+/// neighbours -- but never past the end -- so renderers do not leave seams.
+void write_block(
+  std::ostream & os, double x, int y, double step, int i, int count, int h,
+  const marine_colormap::Rgba & c)
+{
+  const double x0 = x + i * step;
+  const double x1 = x + (i + 1) * step;
+  const double width = (i + 1 < count) ? (x1 - x0 + 0.5) : (x1 - x0);
+  os << "<rect x=\"" << std::fixed << std::setprecision(2) << x0
+     << "\" y=\"" << y << "\" width=\"" << width << "\" height=\"" << h
+     << "\" fill=\"" << hex(c) << "\"" << alpha_attr(c) << "/>\n";
 }
 
 void escape_into(std::ostream & os, const std::string & text)
@@ -119,10 +142,7 @@ void write_swatch(std::ostream & os, int x, int y, int w, int h, SampleFn sample
   const double step = static_cast<double>(w) / kSamples;
   for (int i = 0; i < kSamples; ++i) {
     const double t = (i + 0.5) / kSamples;
-    const marine_colormap::Rgba c = sample_at(t);
-    os << "<rect x=\"" << std::fixed << std::setprecision(2) << (x + i * step)
-       << "\" y=\"" << y << "\" width=\"" << (step + 0.6) << "\" height=\"" << h
-       << "\" fill=\"" << hex(c) << "\"" << alpha_attr(c) << "/>\n";
+    write_block(os, x, y, step, i, kSamples, h, sample_at(t));
   }
   write_ramp_border(os, x, y, w, h);
 }
@@ -141,10 +161,7 @@ void write_indexed_swatch(
   const int count = last - first + 1;
   const double step = static_cast<double>(w) / count;
   for (int i = 0; i < count; ++i) {
-    const marine_colormap::Rgba c = table.lookup(static_cast<float>(first + i));
-    os << "<rect x=\"" << std::fixed << std::setprecision(2) << (x + i * step)
-       << "\" y=\"" << y << "\" width=\"" << (step + 0.6) << "\" height=\"" << h
-       << "\" fill=\"" << hex(c) << "\"" << alpha_attr(c) << "/>\n";
+    write_block(os, x, y, step, i, count, h, table.lookup(static_cast<float>(first + i)));
   }
   write_ramp_border(os, x, y, w, h);
 }
@@ -180,6 +197,8 @@ int main(int argc, char ** argv)
   const int ramp_width = kWidth - kPad * 2;
 
   std::ostringstream os;
+  // SVG numbers must use '.' regardless of the environment's locale.
+  os.imbue(std::locale::classic());
   os << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" << kWidth << "\" height=\""
      << height << "\" viewBox=\"0 0 " << kWidth << " " << height
      << "\" font-family=\"system-ui, -apple-system, Segoe UI, Roboto, sans-serif\">\n";
