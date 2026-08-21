@@ -282,15 +282,34 @@ The consequence for this library is a **narrowing of scope, and a welcome one**:
   colours, the numeric readouts, the contour extraction and any alarms all agree. That is
   the same conclusion S-98 Appendix D reaches by a different route.
 
-**One genuine open question, which our convention and the GeoNav3D precedent answer
-differently.** GeoNav3D used a *modelled tide surface* varying across the display; ADR-0010
-D5 uses a *single measured* `map_tide` at the vehicle and keeps models out of the
-navigation loop. For a boat-local display the measured value is the right call and is
-demonstrably more robust. But camp renders wide areas, and across an estuary a sea surface
-measured at the boat is not the sea surface ten kilometres away — which is precisely why
-GeoNav3D built a tide *grid*. Whether a wide-area display needs something the navigation
-loop deliberately does not is unresolved, and it belongs to camp and mru#8 rather than
-here. Worth raising there before the tide-aware camp work starts.
+**Two tiers of sea surface, and they are complementary rather than competing.** GeoNav3D
+used a *modelled* tide surface varying across the display; ADR-0010 D5 uses a *single
+measured* `map_tide` at the vehicle. Both are right, for different jobs.
+
+Roland's framing (2026-08-21): **think of it as a local costmap versus a global costmap.**
+
+- **Measured `map_tide` is the local tier.** Robot-centric, small extent, high accuracy,
+  derived from the RTK GNSS we carry for ocean mapping. It is what the immediate navigation
+  loop should trust, and D5's exclusion of tide tables and gauge feeds is scoped to *that
+  loop*.
+- **A modelled tide surface is the global tier.** Wide extent, lower precision, able to
+  express **spatial** variation across an estuary and **temporal** variation along a planned
+  path. Entirely appropriate in camp and other operator tools — and, Roland notes, in parts
+  of the robot doing **long-term planning**, which have the same wide-area, ahead-of-time
+  character as an operator display.
+
+So the two coexist without contradiction: D5 keeps models out of the navigation loop, not
+out of the system. The GeoNav3D corridor feature — colouring a planned route at each point's
+estimated time of arrival while its surroundings show the present — is squarely a global-tier
+capability, and it is the one that most obviously wants a model.
+
+For this library, none of that changes anything: it colours a scalar field, and which tier
+produced the frame the field sits in is the consumer's business. It does raise one idea
+worth remembering when the composition stage arrives — a depth adjusted by a *modelled* tide
+far from any measurement is lower-confidence than one adjusted by a measured surface
+alongside the boat, and that is exactly the kind of thing the state-modulation channel
+(saturation encoding confidence) exists to express. Speculative, but it would fall out of
+mechanisms we already intend to build.
 
 ### Alignment with S-100
 
