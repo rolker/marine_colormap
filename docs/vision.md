@@ -156,14 +156,11 @@ continuous and hard-break palettes in one structure. Explicit closures
 on their own merits: they make a break at the safety contour unambiguous and remove a
 whole class of off-by-epsilon bugs at the boundary.
 
-Breaks have **different lifetimes**, which is why they need to be bindable to a source
-rather than being plain numbers in a palette file:
-
-| Break | Lifetime | Example |
-|---|---|---|
-| Chart datum | Fixed palette data | 0.0 |
-| Visible waterline | Live, moves with tide | current water level |
-| Safety contour | Operator setting, tide-adjusted | "keep 2 m under the keel" |
+**Breaks are constants in whichever frame the field is expressed in** — see "Frames, not
+live breakpoints" below. Expressed in a water-surface-relative frame, the waterline break
+sits at 0.0 and a safety break sits at the operator's chosen clearance, and neither has to
+track the tide. That is a simplification over an earlier sketch in which breaks were bound
+to live sources; the binding belongs upstream, on the data, not on the palette.
 
 Degenerate cases must be handled deliberately rather than by throwing: a break outside the
 active data range is the *ordinary* case for a survey line with no land in view. Clamp and
@@ -176,17 +173,45 @@ The near-term driving requirement: a colormap with shoreline and safety-contour 
 used in camp **tide-aware** — shading computed against instantaneous water level rather
 than static chart datum.
 
-This is not a new idea here. **Brennan, Ware, Alexander, Armstrong, Mayer, Huff, Calder,
-Smith, Plumlee, Arsenault and Glang, "Electronic Chart of the Future: The Hampton Roads
-Demonstration Project" (US HYDRO 2003)** demonstrated tide-aware, time-aware depth display
-treating chart datum as a live quantity — roughly a decade before S-98 made the same idea
-normative.
+**This was built here, and the implementation is available to read.** Arsenault, Plumlee,
+Smith, Ware, Brennan and Mayer, *"Fusing Information in a 3D Chart-of-the-Future Display"*
+(US Hydro 2003, [scholars.unh.edu/ccom/267](https://scholars.unh.edu/ccom/267)) describes
+GeoNav3D doing exactly this — *"By summing the instantaneous tide model and the digital
+terrain model, a display can be created that represents the actual depth of the water over
+a large area for a particular time."* The source is in GeoZui4D (`objects/DynamicTides.*`
+and `objects/gutm.cpp`).
 
-Per Roland Arsenault, a co-author, Chart of the Future was a forward-looking research
-project whose aim was to inform the development of S-100. That is a participant's account
-of the project's intent; this survey did not establish a documented causal line from it to
-S-98 Appendix D, and the document does not claim one. The practical point stands either
-way: the model below should feel familiar rather than foreign.
+Three details from that implementation that change how we should design ours:
+
+- **The tide is a surface, not a scalar.** `DynamicTides::getTideOffset(x, y, t)` resolves a
+  per-location, per-time offset from a grid of time offsets and amplitude multipliers plus
+  a station time series (the paper: 200 m cells, 6-minute steps, inverse-distance-weighted
+  from CO-OPS zones). In an estuary the tide genuinely varies across the display, so a
+  single global offset would be wrong.
+- **Two tide *times* can coexist in one view.** Along a planned route, GeoNav3D colours the
+  navigation corridor at each point's *estimated time of arrival* while the surrounding
+  bathymetry uses the current time — the paper points out the resulting colour
+  discontinuity at the corridor edge as a feature, not an artefact. So the adjustment is
+  per-region as well as per-cell.
+- **The shift is applied only below the waterline.** From `gutm.cpp`:
+
+  ```cpp
+  landHeight = pos[Z] + currentH;
+  if (landHeight < waterHeight)
+      currentTexture->SetHeight(landHeight - waterHeight);  // depth below the water surface
+  else
+      currentTexture->SetHeight(landHeight);                // elevation stays datum-referenced
+  ```
+
+  Submerged terrain is re-expressed relative to the instantaneous water surface; emergent
+  terrain keeps its true elevation. That is obviously right once stated — a hill's height
+  does not change with the tide — and it is exactly what a topo-bathy palette needs, since
+  zero in the shifted field *is* the visible waterline.
+
+Also worth knowing: GeoNav3D already had the arbitrary-breakpoint idea. The paper notes it
+*"allows hundreds of color zones to be specified which do not have to be equally spaced"*,
+with danger zones set from a given vessel's draft. The bands encode **under-keel
+clearance** — blue safe, yellow warning, red danger — not raw depth.
 
 `s57_tools` already applies a tide-offset correction for chart display, so tide plumbing
 likely exists to reuse rather than build.
@@ -209,6 +234,42 @@ several cells or two adjacent time steps could apply, **nearest-neighbour rather
 interpolation** between grid values, and **refuse to adjust outside the water-level
 temporal extent** rather than extrapolating. Their defaults are worth copying too: the
 enhanced safety contour is on by default, while water-level adjustment is opt-in.
+
+### Frames, not live breakpoints
+
+Roland's framing, and it is the cleanest way to state the whole tide question: this is a
+**reference-frame** problem, and it parallels the frame handling the workspace already does
+elsewhere (`mru_transform`, the REP-style frames work).
+
+There is a stack of vertical frames:
+
+| Frame | Offset from the one above | Nature |
+|---|---|---|
+| Chart datum (MLLW) | — | fixed vertical reference |
+| Instantaneous water surface | tide(x, y, t) | varies in space *and* time |
+| Keel | vessel draft | per-vessel constant |
+
+A depth value is only meaningful once you say which frame it is in, and each of the display
+questions is really a frame choice. "How deep is the chart here" is the datum frame. "How
+much water is over that rock right now" is the water-surface frame. "Will I hit it" is the
+keel frame — which is why GeoNav3D's safe/warning/danger bands are constants in the keel
+frame rather than depths.
+
+The consequence for this library is a **narrowing of scope, and a welcome one**:
+
+- **`marine_colormap` should never know about tides, datums or drafts.** It colours a scalar
+  field. Which frame that field is expressed in is the consumer's business.
+- **Breakpoints are constants in the chosen frame.** Pick the water-surface frame and the
+  waterline break is 0.0 and the safety break is the operator's clearance — permanently. No
+  live binding, no per-tick palette mutation, no LUT invalidation.
+- **The transform is where the tide-awareness lives**, applied once, upstream, so the
+  colours, the numeric readouts, the contour extraction and any alarms all agree. That is
+  the same conclusion S-98 Appendix D reaches by a different route.
+
+One consequence to keep in view: in a water-surface frame, chart datum itself sits at
+−tide, so a display wanting to show *both* the current waterline and chart datum has one
+break that genuinely moves. For navigation that second break is not needed; for survey and
+charting work it may be.
 
 ### Alignment with S-100
 
