@@ -295,8 +295,10 @@ depth here" and "see the morphology" modes, and the right answer differs.
 
 ### State modulation: dimming and highlighting
 
-A colormapped item should be able to render **dimmed** or **highlighted**. Two motivating
-cases, both real:
+A colormapped item should be able to render **less prominent** or **more prominent** than
+its neighbours. "Dimmed" is the shorthand, but the requirement is about *prominence*, not
+about luminance specifically — which matters, because the right channel turns out not to be
+luminance. Two motivating cases, both real:
 
 - **Selection** — indicating which surface or layer is currently selected.
 - **LOD staleness** — an LOD-capable display showing coarse tiles while fine data loads can
@@ -309,7 +311,7 @@ this one comes from item state. That argues for generalising the composition sta
 "shading" to **state modulation**, with shading as one contributor — and it means the two
 must compose, since a coarse tile can also be hill-shaded.
 
-**The obvious implementation is the wrong one.** Dimming by reducing luminance fails twice
+**The obvious implementation — reducing luminance — is the wrong one**, and it fails twice
 over:
 
 - **Ware's own data says use saturation, not lightness.** The bivariate study (Ware, Samsel,
