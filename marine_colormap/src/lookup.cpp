@@ -121,24 +121,30 @@ namespace
 /// - `upper == lower` is empty for Open/GeLt/GtLe (they need positive width)
 ///   but *not* for Closed, which is how a single value is expressed.
 /// - A NaN in a bound the closure actually uses makes every comparison false.
-/// - A semi-interval can still be empty when its one bound is the infinity
-///   that excludes everything: `[+inf, ...)` and `(..., -inf)` match nothing.
+/// - An **excluding infinity** in a used bound empties the range whatever the
+///   closure: no finite value is `>= +inf`, and none is `<= -inf`. So
+///   `[+inf, +inf]` matches nothing, while `[-inf, +inf]` matches everything —
+///   the difference is which end the infinity sits on, not the closure.
 bool never_matches(const ValueRange & r)
 {
+  constexpr float kInfinity = std::numeric_limits<float>::infinity();
   const bool lower_used = !unbounded_below(r.closure);
   const bool upper_used = !unbounded_above(r.closure);
 
   if (lower_used && std::isnan(r.lower)) {return true;}
   if (upper_used && std::isnan(r.upper)) {return true;}
 
+  // An excluding infinity empties the range regardless of the other bound.
+  if (lower_used && r.lower == kInfinity) {return true;}
+  if (upper_used && r.upper == -kInfinity) {return true;}
+
   if (lower_used && upper_used) {
     return (r.closure == Closure::ClosedInterval) ? (r.upper < r.lower) : !(r.upper > r.lower);
   }
-  if (lower_used) {  // Ge/GtSemiInterval: v >= lower (or >)
-    return r.lower == std::numeric_limits<float>::infinity();
-  }
-  // Lt/LeSemiInterval: v < upper (or <=)
-  return r.upper == -std::numeric_limits<float>::infinity();
+  // A semi-interval whose single bound is the *including* infinity matches
+  // every finite value, so it is not empty — and it is genuinely unbounded,
+  // which index_domain() handles separately.
+  return false;
 }
 
 }  // namespace
