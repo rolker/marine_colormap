@@ -27,6 +27,10 @@ namespace detail
 // Defined in perceptual_palettes.cpp (generated canonical viridis/turbo tables).
 std::vector<Rgba> viridis_colors();
 std::vector<Rgba> turbo_colors();
+std::vector<ColorStop> oleron_stops();
+std::vector<ColorStop> hypsometric_stops();
+PaletteDomain oleron_domain();
+PaletteDomain hypsometric_domain();
 }  // namespace detail
 
 Palette::Palette(std::string name, std::vector<ColorStop> stops)
@@ -39,6 +43,12 @@ Palette::Palette(std::string name, std::vector<ColorStop> stops)
   std::stable_sort(
     stops_.begin(), stops_.end(),
     [](const ColorStop & a, const ColorStop & b) {return a.t < b.t;});
+}
+
+Palette::Palette(std::string name, std::vector<ColorStop> stops, PaletteDomain domain)
+: Palette(std::move(name), std::move(stops))
+{
+  domain_ = domain;
 }
 
 Rgba Palette::sample(float t) const
@@ -89,8 +99,9 @@ Palette even(std::string name, std::vector<Rgba> colors)
 // Canonical built-ins. Order is append-only (see palette.hpp). The `thermal`
 // ramp is the de-duplicated sonar thermal (the rviz_sonar_image ramp had an
 // accidental duplicated stop; this drops it). `bronze` and `grayscale` match the
-// existing sonar definitions. viridis/turbo are intentionally absent until their
-// canonical published tables are imported (ADR-0001 / README).
+// existing sonar definitions. viridis/turbo carry the canonical published
+// matplotlib tables (see perceptual_palettes.cpp); the two topo-bathy ramps come
+// from topobathy_palettes.cpp, each with its own licence notice.
 const std::vector<Palette> & registry()
 {
   static const std::vector<Palette> kPalettes = {
@@ -109,6 +120,13 @@ const std::vector<Palette> & registry()
     // -> yellow -> red diverging stoplight, t=0 good -> t=0.5 caution ->
     // t=1 bad. Appended last to keep existing indices stable.
     even("quality", {rgb8(0, 170, 0), rgb8(255, 215, 0), rgb8(210, 0, 0)}),
+    // Topo-bathy ramps (#15). Both carry a PaletteDomain: the elevations their
+    // colours were designed against, and where the shoreline sits in colour
+    // space, so consumers don't hard-code it. `oleron` is perceptually uniform
+    // with a hard break at the shoreline; `hypsometric` is the classic
+    // cartographic look, better when contrasting land relief in a 3D view.
+    Palette("oleron", detail::oleron_stops(), detail::oleron_domain()),
+    Palette("hypsometric", detail::hypsometric_stops(), detail::hypsometric_domain()),
   };
   return kPalettes;
 }

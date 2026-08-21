@@ -10,6 +10,11 @@
   unh_marine_autonomy.</description>
   <maintainer email="roland@ccom.unh.edu">Roland Arsenault</maintainer>
   <license>Apache-2.0</license>
+  <!-- Vendored palette data: Crameri's Scientific Colour Maps (`oleron`) is MIT.
+       Declared here so downstream licence-compliance tooling sees it. Full terms
+       and the rest of the provenance are in THIRD_PARTY_NOTICES.md, installed to
+       share/marine_colormap/. -->
+  <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
