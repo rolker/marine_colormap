@@ -99,6 +99,15 @@ proportionally, which would slide an anchored break off its data value. **This i
 synthesis of GMT's hinge with S-52's mariner-configurable depth classes, not a borrow.**
 We own the edge cases.
 
+**S-100 already specifies this shape, and we should adopt it** (see "Alignment with S-100"
+below). Its coverage portrayal model is an *ordered list of lookup entries, first match
+wins*, each carrying a label, a numeric range with an **explicit interval closure**, and
+either a flat colour or a start/end colour pair forming a ramp. That expresses discrete,
+continuous and hard-break palettes in one structure. Explicit closures
+(`geLtInterval`, `ltSemiInterval`, `geSemiInterval`, `closedInterval`) are worth copying
+on their own merits: they make a break at the safety contour unambiguous and remove a
+whole class of off-by-epsilon bugs at the boundary.
+
 Breaks have **different lifetimes**, which is why they need to be bindable to a source
 rather than being plain numbers in a palette file:
 
@@ -124,6 +133,74 @@ Smith, Plumlee, Arsenault and Glang, "Electronic Chart of the Future: The Hampto
 Demonstration Project" (US HYDRO 2003)** demonstrated tide-aware, time-aware depth display
 treating chart datum as a live quantity. `s57_tools` already applies a tide-offset
 correction for chart display, so tide plumbing likely exists to reuse rather than build.
+
+**It is also now normative IHO practice, which gives us a model to follow.** S-98 Edition
+2.0.0 (October 2025), Appendix D, specifies **Water Level Adjustment** as mandatory on
+S-100 ECDIS: *"The functionality and portrayal of the safety contour, depth zone shades,
+safety depth and indication of isolated dangers must use the adjusted depth."*
+
+The important architectural lesson is **how** they do it: WLA adjusts the *depth values*
+by the water level and then applies the **unchanged** portrayal. Tide-awareness is a
+**domain shift, not a palette change.** We should do the same — keep the colormap static
+and shift the data or the breakpoints — because it is simpler, it keeps the palette
+stable across a tide cycle, and it aligns with the standard.
+
+Their conservatism is worth borrowing wholesale for a robot boat: **shoalest wins** when
+several cells or two adjacent time steps could apply, **nearest-neighbour rather than
+interpolation** between grid values, and **refuse to adjust outside the water-level
+temporal extent** rather than extrapolating. Defaults matter too — S-98 has the enhanced
+safety contour on by default and water-level adjustment *off* by default, with a permanent
+on-screen indication whenever it is active.
+
+### Alignment with S-100
+
+We already consume S-102, so it is worth knowing where the standard is heading. Findings
+below are from primary IHO documents; details and citations are in the S-100 comment on
+[#12](https://github.com/rolker/marine_colormap/issues/12).
+
+**S-100 has a first-class continuous-coverage portrayal model** (Part 9, clause 9-12.7,
+"The Coverage package"), and it is close to what we want: an ordered, first-match list of
+`LookupEntry` records, each with a `label` for the legend, a numeric range with an explicit
+closure, and a `CoverageColor` that is either one flat colour or a `startColor`/`endColor`
+pair forming a ramp. The S-52 colour-token model survives and is generalised: tokens
+resolved through named palettes carrying **both CIE xyY — with Y as absolute luminance in
+cd/m² — and sRGB**. Rules are Lua (Part 9a) or XSLT (Part 9); the shipped S-101 and S-102
+catalogues have both moved to Lua.
+
+Four consequences for us:
+
+- **S-102 does not use a continuous ramp.** Despite being gridded continuous bathymetry,
+  its portrayal catalogue is eighteen lines of Lua reproducing S-52 banded depth shading
+  with hard breaks at operator-set `ShallowContour`, `SafetyContour` and `DeepContour`,
+  plus an intertidal band below zero. If our topo-bathy palette exposes those same
+  parameter names and the same constraints
+  (`ShallowContour ≤ SafetyContour ≤ DeepContour`, a two-shade/four-shade switch), an
+  S-102-literate hydrographer reads our configuration with no explanation, and importing a
+  real S-102 catalogue later becomes mechanical.
+- **Above chart datum we are on our own.** S-102 gives exactly one band below zero and no
+  elevation ramp. There is no IHO topographic colour scheme to conform to, so the land
+  half of a topo-bathy palette is a free design choice.
+- **S-102 uncertainty portrayal is unspecified** — the rule emits a null instruction, and
+  uncertainty is consumed numerically to widen danger check areas rather than rendered.
+  That is open territory, and it is where [camp#145](https://github.com/rolker/camp/issues/145)
+  (defaulting an uncertainty band to the `quality` ramp) is heading anyway.
+- **Interpolating ramps in CIE xyY, component-wise including alpha, is the normative S-100
+  rule.** We interpolate in sRGB today. Adopting xyY would be both a defensible perceptual
+  choice and a citable one — worth deciding deliberately rather than by default.
+
+**Licensing: load catalogues at runtime; do not vendor IHO colour tables.** IHO
+publications are copyright IHO with commercial exploitation requiring written permission,
+and the IHO GitHub repositories almost all carry no licence file at all, which means all
+rights reserved. Runtime loading is also architecturally cleaner and mirrors how S-100
+itself separates catalogues from software — an S-102 portrayal catalogue is five files and
+trivially loadable. Note also that the S-52 Annex A:100 presentation library for S-100
+ECDIS is **not** publicly available; it ships only under the S-100 Security Scheme.
+
+Timeline, for context: S-100 ECDIS became voluntary on 1 January 2026 and is mandated for
+new installations from 1 January 2029. The data models are stable and shipping; the
+portrayal side is visibly thinner, and S-98's tide-aware machinery sits *outside* Part 9 by
+the IHO's own admission. We are not going against the grain — we are working in a gap the
+IHO has itself flagged as unresolved.
 
 ### The shading seam
 
@@ -153,15 +230,24 @@ depth here" and "see the morphology" modes, and the right answer differs.
 
 ### Colour profiles (day / dusk / night)
 
-S-52 ships DAY_BRIGHT, DAY_WHITEBACK, DAY_BLACKBACK, DUSK and NIGHT. The *structure* of
-the depth classes is identical across all five; only the colour values change. So this is
-a **variant axis on an otherwise-identical palette definition** — metadata in the format,
-not a new mechanism — and it composes with everything else: a multi-hinge topo-bathy
-palette can carry a night variant without any break logic changing.
+S-52 ships five palettes, but **every S-100 portrayal catalogue actually shipped uses
+three** — `Day`, `Dusk`, `Night` (verified in the S-101, S-102 and S-111 catalogues). The
+S-52 day triad has not been carried forward. Three is the right target.
 
-Note the selection is **global display state**, not a per-layer choice, so it lives
-somewhere different from the per-layer palette selection. Dark adaptation on a bridge at
-night is a real operational need, not a nicety.
+The *structure* is identical across variants; only the colour values change. So this is a
+**variant axis on an otherwise-identical palette definition** — metadata in the format,
+not a new mechanism — and it composes with everything else: a multi-break topo-bathy
+palette can carry a night variant without any break logic changing. Selection is **global
+display state**, not a per-layer choice, so it lives somewhere different from the
+per-layer palette selection.
+
+**Copy the IHO's discipline for building the variants**: chromaticity (x, y) is held
+**constant per token across all three palettes, and only luminance varies.** In the
+shipped S-102 profile the shallow→deep ladder is a monotonic luminance ramp by day
+(35→45→55→65→80 cd/m²) that **inverts at night**, where deep water goes to literal black
+and only the shallow, dangerous end retains any luminance. A naive "darken everything"
+transform does not reproduce that, and the inversion is the entire point of a night
+palette. Dark adaptation on a bridge at night is a real operational need, not a nicety.
 
 ### Format, registry, and where palettes live
 
@@ -274,8 +360,11 @@ come from configuration.
   handles; a multi-break legend needs non-linear ticks and break markers.
 - What does a consumer do when a persisted palette name is no longer installed? Silently
   falling back to grayscale on a boat is a bad failure.
-- Where do S-100 portrayal conventions land, and do S-102 (bathymetric surface) or S-104
-  (water level) constrain any of this? *(Under investigation.)*
+- Do we adopt S-100's CIE xyY component-wise ramp interpolation, or keep interpolating in
+  sRGB? (Answered for us if we want catalogue-level S-100 compatibility; a real choice
+  otherwise.)
+- How far do we take S-100 alignment — mirror the lookup-entry shape and parameter names
+  only, or aim to actually load a signed S-102 portrayal catalogue at runtime?
 - Does the authoring tool live in this repo or its own?
 
 ## References
@@ -300,3 +389,9 @@ Full citations are in the prior-art comments on
 - Crameri, Shephard, Heron (2020). "The misuse of colour in science communication."
   *Nature Communications* 11:5444.
 - IHO S-52 Edition 6.1.1 (2015), Presentation Library Appendix 2.
+- IHO S-100 Edition 5.2.1 (December 2025), Part 9 / Part 9a (Portrayal), esp. clause
+  9-12.7 "The Coverage package"; Part 16a (Harmonised Portrayal).
+- IHO S-98 Edition 2.0.0 (October 2025), Appendix D — Enhanced Safety Contour and Water
+  Level Adjustment.
+- IHO S-102 Edition 3.0.0 (December 2024) and Portrayal Catalogue 3.0.0; S-104 Edition
+  2.0.0 (no portrayal catalogue by design); S-111 Edition 2.0.0 and Portrayal Catalogue.
