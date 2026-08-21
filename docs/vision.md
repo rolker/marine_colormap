@@ -162,11 +162,18 @@ The near-term driving requirement: a colormap with shoreline and safety-contour 
 used in camp **tide-aware** — shading computed against instantaneous water level rather
 than static chart datum.
 
-This is not a new idea here. **Brennan, Ware, Alexander, Armstrong, Mayer, Huff, Calder,
-Smith, Plumlee, Arsenault and Glang, "Electronic Chart of the Future: The Hampton Roads
+This is not a new idea here, and the lineage runs directly into the standard we are now
+borrowing from. **Brennan, Ware, Alexander, Armstrong, Mayer, Huff, Calder, Smith,
+Plumlee, Arsenault and Glang, "Electronic Chart of the Future: The Hampton Roads
 Demonstration Project" (US HYDRO 2003)** demonstrated tide-aware, time-aware depth display
-treating chart datum as a live quantity. `s57_tools` already applies a tide-offset
-correction for chart display, so tide plumbing likely exists to reuse rather than build.
+treating chart datum as a live quantity. Chart of the Future was a **forward-looking
+research project intended to inform the development of S-100** — so the S-98 Appendix D
+water-level-adjustment machinery described below is downstream of that work rather than
+a separate tradition. We are not adopting a foreign model; we are picking up a thread this
+group helped start.
+
+`s57_tools` already applies a tide-offset correction for chart display, so tide plumbing
+likely exists to reuse rather than build.
 
 **It is also now normative IHO practice, which gives us a model to follow.** S-98 Edition
 2.0.0 (October 2025), Appendix D, specifies **Water Level Adjustment** as mandatory on
@@ -299,10 +306,12 @@ than import-only, accepting lossiness for multi-break palettes. `.cpt` is what t
 hydrographic world speaks and the only common format carrying an absolute z-range with a
 hinge.
 
-A model decision precedes any parser: **stop-based or segment-based?** A plain stop list
-cannot express a hard discontinuity, and a shoreline break *is* one. GIMP's `.ggr` is
-segment-based and can; Krita's "stop handle as a UI fiction over a segment model" is the
-bridge if we want a simple UI over a discontinuity-capable model.
+The stop-based-versus-segment-based question that would otherwise precede any parser is
+**settled by adopting S-100's lookup-entry shape**: a list of intervals with explicit
+closures *is* a segment model, and it expresses a hard discontinuity natively — which a
+plain stop list cannot, and a shoreline break *is* one. Krita's "stop handle as a UI
+fiction over a segment model" remains the pattern if we later want a simple stop-style
+editing UI over it.
 
 **Licensing is a real constraint, verified**: GMT's own palettes (`globe`, `relief`,
 `etopo1`, `gebco`, …) are **LGPL-3+** and must not be vendored into this Apache-2.0
@@ -356,6 +365,24 @@ Things that must survive every change below:
 - **Authoring never ships to a boat.** No runtime consumer depends on the authoring tool.
 - **Existing consumers keep working** through every step.
 
+## Readiness
+
+Settled enough to build on: the layered architecture; the lookup-entry model shape and its
+explicit interval closures (now backed by a standard rather than invented here); breakpoint
+semantics and the differing lifetimes of palette-fixed, live and operator-set breaks;
+tide-awareness as a domain shift; colour profiles as metadata with three variants built by
+varying luminance at fixed chromaticity; the usage-versus-authoring packaging boundary; the
+painter-versus-widget split; and the invariants.
+
+Still genuinely open: the on-disk format choice, shadowing policy for user palettes, xyY
+versus sRGB interpolation, legend placement specifics in camp, and where the authoring tool
+lives.
+
+**None of the open items blocks step 1**, because step 1 is an in-memory model with no file
+format, no UI and no persistence. They become blocking at step 6, by which point the model
+will have taught us things that ought to inform them anyway. That is the argument for
+starting now rather than deciding everything first.
+
 ## Sequencing
 
 Ordered so each step is independently useful and derisks the next.
@@ -387,7 +414,6 @@ come from configuration.
 
 - Does the anchored-breakpoint mechanism really unify fixed-domain and pivot palettes, or
   do they diverge once we build them?
-- Stop-based or segment-based palette model?
 - Native format: ParaView JSON, or JSON plus first-class `.cpt`?
 - Shadowing policy for user palettes over built-ins: forbidden, warned, or namespaced?
 - Legend placement in camp: ramp strips in the layer tree, pinned legends in the view, a
