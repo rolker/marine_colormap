@@ -127,6 +127,28 @@ void write_swatch(std::ostream & os, int x, int y, int w, int h, SampleFn sample
   write_ramp_border(os, x, y, w, h);
 }
 
+/// A lookup table is not a ramp: its entries are keyed by absolute values, and
+/// several of them match exactly one integer. Sampling at fractional midpoints
+/// would miss those entirely -- a midpoint like -127.7 matches no entry at all
+/// and would render as the transparent `unmapped` sentinel, turning the
+/// single-value bands (unknown, free space, inscribed, lethal) into holes and
+/// misdescribing the table. So draw one block per integer value instead.
+void write_indexed_swatch(
+  std::ostream & os, int x, int y, int w, int h,
+  const marine_colormap::LookupTable & table, int first, int last)
+{
+  write_ramp_frame(os, x, y, w, h);
+  const int count = last - first + 1;
+  const double step = static_cast<double>(w) / count;
+  for (int i = 0; i < count; ++i) {
+    const marine_colormap::Rgba c = table.lookup(static_cast<float>(first + i));
+    os << "<rect x=\"" << std::fixed << std::setprecision(2) << (x + i * step)
+       << "\" y=\"" << y << "\" width=\"" << (step + 0.6) << "\" height=\"" << h
+       << "\" fill=\"" << hex(c) << "\"" << alpha_attr(c) << "/>\n";
+  }
+  write_ramp_border(os, x, y, w, h);
+}
+
 std::string describe(const marine_colormap::Palette & p)
 {
   std::ostringstream os;
@@ -187,11 +209,7 @@ int main(int argc, char ** argv)
   // The costmap table is not a ramp: it is a fixed-domain lookup over int8, so
   // the axis here is the data value, not a normalized position.
   write_label(os, kPad, y + 13, "costmap lookup table  (int8 domain, -128 to 127)", false);
-  write_swatch(
-    os, kPad, y + kLabelHeight, ramp_width, kRampHeight,
-    [&costmap](double t) {
-      return costmap.lookup(static_cast<float>(-128.0 + t * 255.0));
-    });
+  write_indexed_swatch(os, kPad, y + kLabelHeight, ramp_width, kRampHeight, costmap, -128, 127);
   y += row_height;
 
   os << "<text x=\"" << kPad << "\" y=\"" << (y + 6)
