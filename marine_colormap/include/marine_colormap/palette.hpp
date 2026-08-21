@@ -33,9 +33,6 @@ struct ColorStop
   Rgba color{};
 };
 
-/// A named colormap: an ordered list of stops, sampled by piecewise-linear
-/// interpolation. Stop positions are explicit so non-uniform ramps are
-/// expressible; the built-ins are evenly spaced.
 /// Optional metadata describing the data domain a palette was designed for.
 ///
 /// Most palettes have none — a sonar ramp is meaningful over whatever range the
@@ -65,6 +62,12 @@ struct PaletteDomain
   }
 };
 
+/// A named colormap: an ordered list of stops, sampled by piecewise-linear
+/// interpolation. Stop positions are explicit, so non-uniform ramps are
+/// expressible -- the sonar and perceptual built-ins are evenly spaced, while
+/// the topo-bathy ones are not (`hypsometric`'s stops are literal elevations,
+/// and `oleron` carries two coincident stops at t = 0.5 for its hard shoreline
+/// break).
 class Palette
 {
 public:
@@ -98,9 +101,11 @@ private:
 // The registry order is **append-only and name-keyed**: indices never change as
 // palettes are added, so consumers can persist a selection by name (preferred)
 // or index without it silently re-mapping. Current order: 0=grayscale,
-// 1=bronze, 2=thermal, 3=viridis, 4=turbo. (viridis/turbo are the canonical
-// matplotlib tables; see perceptual_palettes.cpp.) New palettes append at the
-// end so existing indices stay stable.
+// 1=bronze, 2=thermal, 3=viridis, 4=turbo, 5=quality, 6=oleron,
+// 7=hypsometric. (viridis/turbo are the canonical matplotlib tables, see
+// perceptual_palettes.cpp; oleron and hypsometric are the topo-bathy ramps in
+// topobathy_palettes.cpp, each with its own licence notice.) New palettes
+// append at the end so existing indices stay stable.
 
 /// All built-in palettes, in registry order.
 const std::vector<Palette> & palettes();
