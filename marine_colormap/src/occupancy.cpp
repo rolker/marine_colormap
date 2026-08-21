@@ -108,10 +108,18 @@ LookupTable occupancy_costmap_table()
   Sentinels sentinels;
   // Non-finite input is invalid data, distinct from the `Unknown` entry above.
   sentinels.bad = rgb8(0, 0, 0, 0);
-  // Unreachable for any int8 value -- the entries are contiguous across the
-  // whole domain -- but transparent is the safe answer if a caller ever feeds
-  // this table something out of band.
+
+  // Unreachable: the entries are contiguous and ClosedInterval across the whole
+  // domain, so no int8 value can land in a gap. Transparent is the defensive
+  // default if that ever stops being true.
   sentinels.unmapped = rgb8(0, 0, 0, 0);
+
+  // `under` and `over` are deliberately left unset. Unset resolves to the colour
+  // of the entry owning each extreme -- which here are the two "illegal" bands,
+  // red at the bottom and green at the top. That is the behaviour we want: a
+  // value outside the int8 domain is a caller error, and it should show up
+  // loudly in the same colours rviz already uses for illegal values, rather than
+  // rendering transparent and being mistaken for "no data here".
 
   return LookupTable(std::move(entries), sentinels);
 }

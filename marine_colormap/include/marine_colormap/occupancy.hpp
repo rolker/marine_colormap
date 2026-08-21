@@ -27,9 +27,12 @@ namespace marine_colormap
 /// values, so it owns its domain intrinsically and there is nothing for an
 /// operator to rescale. No range model is involved, and none should be.
 ///
-/// Colours are kept bit-exact with rviz's `palette_builder.cpp`, deliberately.
-/// Operators recognise magenta-is-lethal and cyan-is-inscribed on sight, and a
-/// deviation would read as a bug in the field rather than as a design choice:
+/// Colours track rviz's `palette_builder.cpp` deliberately: the discrete values
+/// (free space, inscribed, lethal, unknown, the illegal bands) are exact, and
+/// the two ramps agree to within one 8-bit level -- see the precision note at
+/// the end. Operators recognise magenta-is-lethal and cyan-is-inscribed on
+/// sight, and a deviation would read as a bug in the field rather than as a
+/// design choice:
 ///
 /// | value    | meaning          | colour                      |
 /// |----------|------------------|-----------------------------|
@@ -46,8 +49,13 @@ namespace marine_colormap
 /// so conflating it with invalid data would be a category error. `bad` remains
 /// reserved for genuinely non-finite input.
 ///
-/// The entries are contiguous and cover the whole domain, so `under`, `over`
-/// and `unmapped` are all unreachable for any `int8` value.
+/// The entries are contiguous and cover the whole domain, so `unmapped` is
+/// unreachable for any `int8` value, and so are `under` and `over`. Both are
+/// left unset deliberately, which resolves them to the colour of the entry
+/// owning each extreme -- the two "illegal" bands. A value outside the `int8`
+/// domain is a caller error, and showing it in rviz's own illegal-value colours
+/// makes it visible rather than letting it render transparent and be mistaken
+/// for "no data here".
 ///
 /// **Trap worth knowing**: nav2's *internal* costmap is `uint8` with
 /// `NO_INFORMATION = 255`, `LETHAL_OBSTACLE = 254` and

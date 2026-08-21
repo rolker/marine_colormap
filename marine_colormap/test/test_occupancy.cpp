@@ -185,3 +185,21 @@ TEST(OccupancyCostmap, NoNewMachineryWasNeededForAFixedDomain)
     EXPECT_FLOAT_EQ(a.a, b.a);
   }
 }
+
+TEST(OccupancyCostmap, OutOfDomainValuesAreLoudNotInvisible)
+{
+  // Copilot's review of PR #20 caught that the sentinel comment disagreed with
+  // the behaviour. The behaviour is the one we want: `under`/`over` are unset,
+  // so they resolve to the entries owning each extreme -- the illegal bands. A
+  // caller error should be visible, not render as empty water.
+  const LookupTable t = occupancy_costmap_table();
+
+  const Rgba below = t.lookup(-200.0f);
+  EXPECT_GT(below.a, 0.0f) << "out-of-domain low must not be invisible";
+  EXPECT_FLOAT_EQ(1.0f, below.r);   // illegal-negative red
+
+  const Rgba above = t.lookup(200.0f);
+  EXPECT_GT(above.a, 0.0f) << "out-of-domain high must not be invisible";
+  EXPECT_FLOAT_EQ(1.0f, above.g);   // illegal-positive green
+  EXPECT_FLOAT_EQ(0.0f, above.r);
+}
