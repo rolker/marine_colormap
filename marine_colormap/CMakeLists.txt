@@ -40,6 +40,16 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 install(
   DIRECTORY include/
   DESTINATION include)
+
+# Ship the licence and the third-party notices with the installed package. MIT
+# requires its permission notice to accompany redistributed copies, and a binary
+# install is a redistribution -- leaving these in the source tree only would be
+# a compliance gap for anyone consuming the built package.
+install(
+  FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../THIRD_PARTY_NOTICES.md"
+  DESTINATION share/${PROJECT_NAME})
 install(
   TARGETS ${PROJECT_NAME}
   EXPORT export_${PROJECT_NAME}
