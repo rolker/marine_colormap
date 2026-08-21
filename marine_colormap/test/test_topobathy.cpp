@@ -142,8 +142,11 @@ TEST(Oleron, DeclaresAShorelineButNoNaturalRange)
 TEST(Hypsometric, NodesMatchTheGeoZuiTable)
 {
   const Palette & p = *by_name("hypsometric");
-  const auto & d = *by_name("hypsometric")->domain();
+  ASSERT_TRUE(p.domain().has_value());
+  const auto & d = *p.domain();
   ASSERT_TRUE(d.has_natural_range());
+  ASSERT_TRUE(d.natural_min.has_value());
+  ASSERT_TRUE(d.natural_max.has_value());
   const auto at = [&](float metres) {
       return p.sample((metres - *d.natural_min) / (*d.natural_max - *d.natural_min));
     };
@@ -156,7 +159,9 @@ TEST(Hypsometric, NodesMatchTheGeoZuiTable)
 TEST(Hypsometric, RunsGreenThroughBrownToGreyWithAltitude)
 {
   const Palette & p = *by_name("hypsometric");
+  ASSERT_TRUE(p.domain().has_value());
   const auto & d = *p.domain();
+  ASSERT_TRUE(d.has_natural_range());
   const auto at = [&](float m) {
       return p.sample((m - *d.natural_min) / (*d.natural_max - *d.natural_min));
     };
@@ -189,6 +194,8 @@ TEST(TopoBathyComposition, ShorelineAnchoredOverAnAsymmetricDomain)
   // The worked example: 80 m of water and 5 m of land, each filling its half of
   // the palette. This is what the vision doc calls the GMT-hinge behaviour.
   const Palette & p = *by_name("oleron");
+  ASSERT_TRUE(p.domain().has_value());
+  ASSERT_TRUE(p.domain()->shoreline_position.has_value());
   const float shoreline = *p.domain()->shoreline_position;
   const BreakpointMap m(-80.0f, 5.0f, {Breakpoint{0.0f, shoreline}});
 
