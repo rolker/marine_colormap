@@ -52,6 +52,34 @@ namespace marine_colormap
 /// (`bake_lut(pal, params, N)`) and DROP marine_colormap_response, sampling the
 /// LUT directly at the normalized value. Doing both applies gain/contrast twice.
 ///
+/// ## Anchored breakpoints on the GPU (issue #23)
+///
+/// The helper above normalizes LINEARLY, which places a palette's land/sea
+/// transition wherever the range midpoint happens to fall. To pin that
+/// transition to an absolute data value — chart datum, a tide height, a safety
+/// contour — do NOT add a breakpoint-aware normalize to the shader. Fold the
+/// `BreakpointMap` into the **bake** instead:
+///
+///     bake_lut(pal, params, N, map)                    // general, N breaks
+///     bake_shoreline_anchored_lut(pal, params, lo, hi, anchor, N)   // one hinge
+///
+/// Entry `i` of the resulting table already holds the colour for the data value
+/// that the shader's existing linear `t` maps to `i / (N - 1)`, so **the GLSL
+/// side needs no change at all** and the anchor costs nothing per fragment.
+///
+/// This also sidesteps the double-application hazard described just above:
+/// there is no second transfer stage to apply twice.
+///
+/// **The one thing a consumer must handle: the anchored LUT is RANGE-DEPENDENT.**
+/// An unanchored `bake_lut()` depends only on the palette, so consumers commonly
+/// cache it keyed on the palette name. An anchored table is a function of the
+/// range and the breakpoints as well, so that cache key must widen to include
+/// them. Get it wrong and a range change serves a stale table — wrong colours,
+/// no crash, no log line, which is the failure mode most likely to reach an
+/// operator unnoticed. Consumers holding a written decision that asserts LUT
+/// range-independence (e.g. camp's ADR-0008 Decision #2) should amend it: that
+/// property holds only on the unanchored path.
+///
 /// On GLES, declare `precision highp float;` -- dB-range data bands at mediump.
 const char * colormap_glsl();
 

@@ -71,4 +71,54 @@ std::vector<Rgba8> bake_lut(const Palette & pal, const TransferParams & p, std::
   return lut;
 }
 
+
+std::vector<Rgba8> bake_lut(
+  const Palette & pal, const TransferParams & p, std::size_t n, const BreakpointMap & map)
+{
+  if (n < 1) {
+    n = 1;
+  }
+  std::vector<Rgba8> lut;
+  lut.reserve(n);
+  for (std::size_t i = 0; i < n; ++i) {
+    // The fraction the GPU's LINEAR normalize produces for this entry.
+    const float f = (n > 1) ? static_cast<float>(i) / static_cast<float>(n - 1) : 0.0f;
+    // Sweep the map's own (already normalized) domain, so an inverted or
+    // non-finite input domain cannot make the sweep and the map disagree.
+    const float value = map.lo() + (map.hi() - map.lo()) * f;
+    // The breakpoint map replaces the linear position; gain/contrast then apply
+    // exactly as in the unanchored bake, keeping the two paths consistent.
+    const float t = apply_response(map.normalize(value), p.gain, p.contrast);
+    Rgba c = pal.sample(t);
+    if (p.alpha_ramp) {
+      // Alpha stays a function of the LINEAR position, matching bake_lut(): the
+      // ramp expresses "where in the display range am I", which the anchor does
+      // not redefine.
+      c.a = alpha_for(f, p);
+    }
+    lut.push_back(to_rgba8(c));
+  }
+  return lut;
+}
+
+bool has_shoreline(const Palette & pal)
+{
+  const std::optional<PaletteDomain> & domain = pal.domain();
+  return domain.has_value() && domain->shoreline_position.has_value();
+}
+
+std::vector<Rgba8> bake_shoreline_anchored_lut(
+  const Palette & pal, const TransferParams & p, float lo, float hi,
+  std::optional<float> anchor_value, std::size_t n)
+{
+  // Gate: no anchor, an unusable anchor, or a palette with no declared shoreline
+  // all fall back to the plain bake -- byte-identical, so anchoring can never
+  // silently recolour a general-purpose ramp.
+  if (!anchor_value || !std::isfinite(*anchor_value) || !has_shoreline(pal)) {
+    return bake_lut(pal, p, n);
+  }
+  const float shoreline = *pal.domain()->shoreline_position;
+  return bake_lut(pal, p, n, BreakpointMap(lo, hi, {Breakpoint{*anchor_value, shoreline}}));
+}
+
 }  // namespace marine_colormap

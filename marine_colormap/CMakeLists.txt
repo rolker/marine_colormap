@@ -75,7 +75,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 
   find_package(ament_cmake_gtest REQUIRED)
-  foreach(test_name palette transfer colormap shader lookup occupancy topobathy)
+  foreach(test_name palette transfer colormap shader lookup occupancy topobathy anchored_bake)
     ament_add_gtest(test_${test_name} test/test_${test_name}.cpp)
     target_link_libraries(test_${test_name} ${PROJECT_NAME})
   endforeach()
