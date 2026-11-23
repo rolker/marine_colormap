@@ -61,3 +61,13 @@ issue: 26
 - [ ] Record ADR-0002's change (Qt major follows ROS's Qt packages) in the same pull request.
 - [ ] Decide in the plan whether `cmake_minimum_required(VERSION 3.8)` is left alone (issue says seen and left; CMake 4.x only warns today) and list it in the follow-up issue with the other "seen and left" items.
 - [ ] Keep the pull request's records: since the issue's records ride in the PR, the plan should say the PR description carries the Qt 5 checked / not checked statement.
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-23 13:18 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: host (the issue review found the issue ready to plan; its open actions are recommendations for the planner and none changes what the work is for or its scope)
+**After**: issue-actions
+**Decision**: proceed
+
+Read: the Issue Review, status complete, no principle row needing action. Its recommendations go to the planner as input, each to be settled in the plan with its reason: how the Qt major is selected (from what `qt_gui_cpp` brings, per the owner's rule "Follow ROS's Qt packages", never from `$ROS_DISTRO`), confirmed for Jazzy by reading upstream; what `ament_export_dependencies` exports so camp gets the same Qt; how rosdep still installs Qt on each distro; CI showing which Qt each job built; the record of the decision next to ADR-0002; the stale Qt 5 wording; which base image the Rolling job can use. `cmake_minimum_required(VERSION 3.8)` is left alone and listed for a follow-up issue.
