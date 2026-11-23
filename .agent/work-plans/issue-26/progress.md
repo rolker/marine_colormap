@@ -187,3 +187,25 @@ Nothing changes on Jazzy: `qt_gui_cpp` says 5, the export is `Qt5Widgets` as tod
 - cppcheck skipped on Rolling (`ament_cppcheck` with cppcheck 2.19.0, #415).
 - `CONTRIBUTING.md` points at a missing `.agents/README.md` and says pull requests go to `jazzy`.
 - The CI installs `ros-dev-tools` without `git`, so `actions/checkout` falls back to the REST API download (as before this change; nothing here needs a `.git`).
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-11-23 13:58 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Verdict**: approved
+
+**Branch**: feature/issue-26 at `401658c`
+**Base**: origin/rolling
+**Depth**: Deep (reason: 200+ changed lines; CI workflow is an override-trigger file)
+**Must-fix**: 0 | **Suggestions**: 2
+**Round**: 1 | **Ship**: recommended — no must-fix findings; remaining suggestions can be applied or tracked
+
+Specialists: static analysis (xmllint ok, YAML parses, lint_cmake/copyright/xmllint tests pass; no yamllint/actionlint on this machine), governance, plan drift (all planned files changed, nothing extra; the test checks every libQt entry of the widget rather than requiring exactly one Core there, which is stricter on mixing and fine), Claude adversarial (no must-fix), Gemini (6 suggestions; 2 kept, rest false positive or covered), Codex (2 suggestions; 1 kept).
+
+Checked against upstream qt_gui_core: jazzy extras set qt_gui_cpp_USE_QT_MAJOR_VERSION 5 only and jazzy exports qt_gui_cpp::qt_gui_cpp (ament_export_targets), so the Qt 5 branch is taken on Jazzy even with Qt 6 dev files installed and `$<TARGET_FILE:qt_gui_cpp::qt_gui_cpp>` resolves there; humble/kilted/lyrical/rolling extras match ADR-0003. Jazzy itself not built here; the first CI run is the first Jazzy evidence.
+
+Re-run here: build of both packages ok; `Summary: 273 tests, 0 errors, 0 failures, 27 skipped`; installed export names `Qt6::Widgets` only; check_same_qt_major.cmake fails on libQt5Widgets (mismatch) and libz (no libQt entry), passes on libQt6Widgets, against Rolling's qt_gui_cpp.so.
+
+### Findings
+- [ ] (suggestion) Guard `qt_gui_cpp_USE_QT_MAJOR_VERSION` against a defined-but-empty or non-numeric value (Lyrical assigns it from python_qt_binding) so it reaches the clear fatal error, e.g. `MATCHES "^[0-9]+$"`; harmless today since Lyrical's own find fails first (Gemini, Claude adversarial) — `marine_colormap_widgets/CMakeLists.txt:35`
+- [ ] (suggestion) ADR wording: CMake's generate-time Qt major disagreement fires only when one target links both majors; a consumer that finds Qt 5 and links this library into a different target than its Qt 5 code is not stopped. Say "a consumer target that links both" (Codex) — `docs/decisions/0003-qt-major-follows-ros.md:80`
