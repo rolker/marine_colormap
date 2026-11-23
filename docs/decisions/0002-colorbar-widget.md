@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Accepted. Qt choice superseded by ADR-0003
+(`docs/decisions/0003-qt-major-follows-ros.md`): the Qt major now follows
+ROS's `qt_gui_cpp`.
 
 ## Context
 

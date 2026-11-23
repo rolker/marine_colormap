@@ -7,7 +7,7 @@ package lives in its own subdirectory (the repo root is not itself a package).
 | Package | Subdir | Depends on | What it is |
 |---|---|---|---|
 | **`marine_colormap`** | [`marine_colormap/`](marine_colormap/) | — (Qt-free) | The core: named palettes, the transfer function (range-normalize → gain → contrast/gamma → alpha), a CPU `lookup()`, `bake_lut()` for the GPU 1-D LUT path, and the auto/manual `RangeModel`. No Qt / Ogre / GL dependencies. |
-| **`marine_colormap_widgets`** | [`marine_colormap_widgets/`](marine_colormap_widgets/) | `marine_colormap` + Qt5 Widgets | `ColormapLegendWidget`: an interactive colorbar legend that paints the value→color mapping and lets an operator drag the min/max handles to pin a manual range. |
+| **`marine_colormap_widgets`** | [`marine_colormap_widgets/`](marine_colormap_widgets/) | `marine_colormap` + Qt Widgets (Qt 5 or Qt 6, the major ROS's `qt_gui_cpp` uses; ADR-0003) | `ColormapLegendWidget`: an interactive colorbar legend that paints the value→color mapping and lets an operator drag the min/max handles to pin a manual range. |
 
 The core stays deliberately Qt-free (project ADR-0001 Tier 1); the Qt cost is
 isolated to `marine_colormap_widgets`. See each package's README for API details.
@@ -37,7 +37,8 @@ colcon test  --packages-select marine_colormap marine_colormap_widgets
 ```
 
 The widget test runs headless under the offscreen Qt platform plugin
-(`QT_QPA_PLATFORM=offscreen`), pulled by the `qtbase5-dev` rosdep dependency.
+(`QT_QPA_PLATFORM=offscreen`), pulled by the `qtbase5-dev` / `qt6-base-dev`
+rosdep dependencies.
 
 ## License
 
