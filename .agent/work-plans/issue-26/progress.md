@@ -308,3 +308,37 @@ Checked:
 
 ### Findings
 - [ ] No issues found. LGTM.
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-11-23 14:06 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Dispatch**: resumed (agent adb9dc09d038ec2d4, resume 1 of 3)
+
+**PR**: #27 at `f4f8335`
+**Sources**: 2 (Local Review @ `53efa45` (covers `f4f8335` via bookkeeping), CI rollup run 45245198134 @ `f4f8335`); no GitHub reviews, inline or conversation comments, no Copilot review requested and no Copilot check-run
+**Cross-source confirmations**: 0
+**CI**: all-pass
+
+Both findings of the Integrated Review at `ca8ed12` are closed by code I read at this head. `ddb8c8b` changes the check to `if(qt_gui_cpp_USE_QT_MAJOR_VERSION MATCHES "^[0-9]+$")` and the fatal error now prints the value — `marine_colormap_widgets/CMakeLists.txt:35`. `da97d6f` limits the generate-step stop to "a consumer target that links both this library and the other Qt major" — `docs/decisions/0003-qt-major-follows-ros.md:81`. The pre-push entry at `401658c` is stale under `sources`: its two findings are the same two, so they are closed by the same commits. The Local Review at `53efa45` has no findings; its `- [ ] No issues found. LGTM.` box is not a finding.
+
+CI run 45245198134 at `f4f8335` (same code as `53efa45`):
+- build-and-test (jazzy), 1m20s, pass:
+  - `marine_colormap_widgets: Qt 5.15.13 (major 5, from qt_gui_cpp)`
+  - `test_same_qt_major` passed: `Qt major 5 as qt_gui_cpp: libQt5Widgets.so.5;libQt5Gui.so.5;libQt5Core.so.5`
+  - Build `Summary: 2 packages finished [11.4s]`
+  - Test `Summary: 2 packages finished [3.58s]` (14/14 and 8/8 passed)
+  - `Summary: 273 tests, 0 errors, 0 failures, 27 skipped`
+  - cppcheck skipped (2.13.0)
+- build-and-test (rolling), 1m26s, pass:
+  - `marine_colormap_widgets: Qt 6.10.2 (major 6, from qt_gui_cpp)`
+  - `test_same_qt_major` passed: `Qt major 6 as qt_gui_cpp: libQt6Widgets.so.6;libQt6Gui.so.6;libQt6Core.so.6`
+  - Build `Summary: 2 packages finished [7.96s]`
+  - Test `Summary: 2 packages finished [2.76s]` (14/14 and 8/8 passed)
+  - `Summary: 273 tests, 0 errors, 0 failures, 27 skipped`
+  - cppcheck skipped (2.19.0)
+
+### Findings
+- [x] No open findings: both earlier suggestions are fixed (`ddb8c8b`, `da97d6f`) and nothing new is raised at `f4f8335`.
+
+### False positives
