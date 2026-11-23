@@ -1,25 +1,49 @@
-# CI for marine_colormap (multi-package). See ADR-0004/0005 (enforcement
-# hierarchy) in the workspace repo for the rationale behind the build+test+lint
-# gate. The core `marine_colormap` has no Qt/Ogre/ROS-message dependencies; the
-# `marine_colormap_widgets` package adds a Qt5 widget (ADR-0002), whose Qt dev
-# headers + offscreen platform plugin are pulled by rosdep from its
-# `qtbase5-dev` dependency. Both packages are built and tested below.
+# CI for marine_colormap (multi-package). The same file is carried on the
+# rolling and jazzy branches; pushes and pull requests to either run it. See
+# ADR-0004/0005 (enforcement hierarchy) in the workspace repo for the rationale
+# behind the build+test+lint gate.
+#
+# Both jobs build and test marine_colormap (no Qt/Ogre/ROS-message
+# dependencies) and marine_colormap_widgets, whose Qt major follows ROS's
+# qt_gui_cpp (ADR-0003): Qt 5 on Jazzy, Qt 6 on Rolling. rosdep installs both
+# Qt development packages (qtbase5-dev and qt6-base-dev) on each distro, so
+# each job also checks that the Qt qt_gui_cpp does not use is not picked. The
+# build step prints each package's output (console_cohesion+), so the log has
+# the configure line naming the Qt picked
+# ("marine_colormap_widgets: Qt <version> (major <N>, from qt_gui_cpp)"), and
+# the test test_same_qt_major compares the built library's Qt entries with
+# qt_gui_cpp's. The widget test runs headless under the offscreen Qt platform
+# plugin, set by the test itself (QT_QPA_PLATFORM=offscreen).
+#
+# rosdep is given only the paths of the build step's --packages-up-to
+# closure, taken from colcon list, with no -r: a key that does not install
+# fails the job. The test step does not source install/setup.bash: colcon
+# test gives each package the environment of its declared workspace
+# dependencies only, so a missing workspace test_depend fails here instead of
+# being hidden by the whole overlay.
+#
+# Job "rolling" is skipped for pull requests to and pushes on jazzy
+# (github.base_ref is the target branch of a pull request; github.ref_name is
+# the pushed branch), so on the jazzy branch this file runs the jazzy job
+# only.
 
 name: CI
 
 on:
   push:
-    branches: [jazzy]
+    branches: [rolling, jazzy]
   pull_request:
-    branches: [jazzy]
+    branches: [rolling, jazzy]
 
 jobs:
-  build-and-test:
+  jazzy:
+    name: build-and-test (jazzy)
+    # The container supplies the distro's OS; the host runner only runs it.
     runs-on: ubuntu-24.04
     permissions:
       contents: read
     container:
-      image: ros:jazzy-ros-base
+      image: ros:jazzy-ros-core
 
     steps:
       - name: Update apt
@@ -45,22 +69,29 @@ jobs:
 
       - name: Install ROS dependencies
         working-directory: ../ws
-        run: >
-          DEBIAN_FRONTEND=noninteractive
-          rosdep install --from-paths src --ignore-src -r -y
+        shell: bash
+        run: |
+          set -euo pipefail
+          paths="$(colcon list --base-paths src --paths-only --packages-up-to marine_colormap marine_colormap_widgets)"
+          if [ -z "$paths" ]; then
+            echo "colcon list returned no package paths" >&2
+            exit 1
+          fi
+          echo "$paths"
+          # shellcheck disable=SC2086
+          DEBIAN_FRONTEND=noninteractive rosdep install --ignore-src -y --from-paths $paths
 
       - name: Build
         working-directory: ../ws
         run: >
           bash -c 'source /opt/ros/jazzy/setup.bash &&
-          colcon build --packages-up-to marine_colormap_widgets
-          --cmake-args -DBUILD_TESTING=ON'
+          colcon build --packages-up-to marine_colormap marine_colormap_widgets
+          --event-handlers console_cohesion+'
 
       - name: Test
         working-directory: ../ws
         run: >
           bash -c 'source /opt/ros/jazzy/setup.bash &&
-          source install/setup.bash &&
           colcon test --packages-select marine_colormap marine_colormap_widgets
           --event-handlers console_direct+
           --return-code-on-test-failure'
@@ -69,5 +100,72 @@ jobs:
         working-directory: ../ws
         run: >
           bash -c 'source /opt/ros/jazzy/setup.bash &&
+          colcon test-result --verbose'
+        if: always()
+
+  rolling:
+    name: build-and-test (rolling)
+    if: (github.base_ref || github.ref_name) != 'jazzy'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    container:
+      image: ros:rolling-ros-core
+
+    steps:
+      - name: Update apt
+        run: apt-get update
+
+      - name: Install ros dev tools
+        run: DEBIAN_FRONTEND=noninteractive apt-get -y install ros-dev-tools
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Init rosdep
+        run: |
+          if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+            rosdep init
+          fi
+
+      - name: Update rosdep
+        run: rosdep update
+
+      - name: Create workspace
+        run: mkdir -p ../ws/src && ln -s "$GITHUB_WORKSPACE" ../ws/src/marine_colormap
+
+      - name: Install ROS dependencies
+        working-directory: ../ws
+        shell: bash
+        run: |
+          set -euo pipefail
+          paths="$(colcon list --base-paths src --paths-only --packages-up-to marine_colormap marine_colormap_widgets)"
+          if [ -z "$paths" ]; then
+            echo "colcon list returned no package paths" >&2
+            exit 1
+          fi
+          echo "$paths"
+          # shellcheck disable=SC2086
+          DEBIAN_FRONTEND=noninteractive rosdep install --ignore-src -y --from-paths $paths
+
+      - name: Build
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/rolling/setup.bash &&
+          colcon build --packages-up-to marine_colormap marine_colormap_widgets
+          --event-handlers console_cohesion+'
+
+      - name: Test
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/rolling/setup.bash &&
+          colcon test --packages-select marine_colormap marine_colormap_widgets
+          --event-handlers console_direct+
+          --return-code-on-test-failure'
+
+      - name: Test results
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/rolling/setup.bash &&
           colcon test-result --verbose'
         if: always()
