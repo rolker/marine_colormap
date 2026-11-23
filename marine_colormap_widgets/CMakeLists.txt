@@ -93,6 +93,20 @@ if(BUILD_TESTING)
     ENV QT_QPA_PLATFORM=offscreen)
   # Qt Widgets is pulled in transitively via ${PROJECT_NAME}'s public link.
   target_link_libraries(test_colormap_legend_widget ${PROJECT_NAME})
+
+  # The library must use the Qt major ROS's qt_gui_cpp uses (ADR-0003). The
+  # oracle is qt_gui_cpp's own binary, not MCW_QT_MAJOR, so the check is not
+  # circular.
+  if(NOT CMAKE_OBJDUMP)
+    message(FATAL_ERROR "test_same_qt_major needs objdump (binutils)")
+  endif()
+  ament_add_test(test_same_qt_major
+    GENERATE_RESULT_FOR_RETURN_CODE_ZERO
+    COMMAND "${CMAKE_COMMAND}"
+      "-DOBJDUMP=${CMAKE_OBJDUMP}"
+      "-DLIBRARY=$<TARGET_FILE:${PROJECT_NAME}>"
+      "-DREFERENCE=$<TARGET_FILE:qt_gui_cpp::qt_gui_cpp>"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/test/check_same_qt_major.cmake")
 endif()
 
 ament_package()
