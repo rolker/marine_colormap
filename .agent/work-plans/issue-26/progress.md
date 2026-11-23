@@ -240,3 +240,13 @@ CI, first run for a pull request into `rolling` and first real Qt 5 evidence:
 - [ ] (suggestion, Local Review (Pre-Push) @ `401658c`) Valid. CMake's Qt major compatibility check (`COMPATIBLE_INTERFACE_STRING QT_MAJOR_VERSION`) is per target: it fires only when one target's link closure has both majors, so "A consumer that finds Qt 5 and links this library stops at CMake's generate step" overstates it. Reword to "A consumer target that links both this library and Qt 5 stops at CMake's generate step; a consumer that keeps them in separate targets is not stopped" — `docs/decisions/0003-qt-major-follows-ros.md:80`
 
 ### False positives
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-23 13:59 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: host (two valid suggestions are open and each has a small, named fix; merging past open findings is the owner's answer only)
+**After**: findings
+**Decision**: address
+
+Read: the Integrated Review of pull request 27 at `ca8ed12`: two valid suggestions, no false positives, CI all-pass (run 45243563566: Jazzy configures `Qt 5.15.13 (major 5, from qt_gui_cpp)` and Rolling `Qt 6.10.2 (major 6, from qt_gui_cpp)`; `test_same_qt_major` passes on both against the distro's own `qt_gui_cpp` library; 273 tests, 0 errors, 0 failures, 27 skipped on each). Addressed: (1) the selection accepts `qt_gui_cpp_USE_QT_MAJOR_VERSION` only when it is a whole number (`MATCHES "^[0-9]+$"`), and the fatal message gives the value it saw, so an empty or odd value reaches the ADR-0003 error instead of a misleading CMake one; one code commit for backport. (2) ADR-0003's consumer sentence says that a consumer target linking both this library and the other Qt major stops at CMake's generate step, and one that keeps them in separate targets is not stopped; one docs commit for backport. The triage's note that cppcheck skips on Jazzy too (2.13.0) goes into the follow-up issue draft.
