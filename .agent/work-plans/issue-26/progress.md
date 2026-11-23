@@ -274,3 +274,37 @@ Scratch configures (Rolling, stand-in `qt_gui_cppConfig.cmake` in the session sc
 
 `./test.sh --parallel-workers 4 --packages-select marine_colormap marine_colormap_widgets`: `Summary: 273 tests, 0 errors, 0 failures, 27 skipped`.
 PR body camp paragraph already states the per-target case ("a camp target that links this library together with camp's own Qt 5 targets stops at CMake's generate step"); consistent, no edit needed.
+
+## Local Review
+**Status**: complete
+**When**: 2026-11-23 14:03 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Verdict**: approved
+**Dispatch**: resumed (agent a7275ff554a09f8ff, resume 1 of 3)
+
+**PR**: #27 at `53efa45`
+**Depth**: Deep by whole-diff classification, run as a narrow check per handoff (reason: prior round had no must-fix; scope is the two pre-push suggestions and the fix diff `e16a976..da97d6f`, which touches `marine_colormap_widgets/CMakeLists.txt` and `docs/decisions/0003-qt-major-follows-ros.md` only)
+**Must-fix**: 0 | **Suggestions**: 0
+**Cross-model**: skipped (narrow check after a round with no must-fix, per handoff)
+
+Checked:
+- `ddb8c8b`: `if(qt_gui_cpp_USE_QT_MAJOR_VERSION MATCHES "^[0-9]+$")` closes the pre-push suggestion. An undefined name is compared as its literal text and does not match, so Rolling falls through to `TARGET Qt6::Widgets`. The fatal message now prints the value it saw.
+- Set-but-invalid value with `Qt6::Widgets` present takes Qt 6: accepted. Before the check, only these packages are found:
+  - `ament_cmake`, which defines no Qt targets.
+  - `marine_colormap`, which finds only ament_cmake and exports no Qt.
+  - `qt_gui_cpp`, whose exported deps are `pluginlib;TinyXML2` and whose Rolling extras find `python_qt_binding` (its extras only set a cache variable; the sip and shiboken helpers that mention Qt are not included by its config) and then Qt 6.
+
+  So `Qt6::Widgets` can exist there only because `qt_gui_cpp` found Qt 6. That follows ROS's Qt packages, and `test_same_qt_major` still checks the result against `qt_gui_cpp`'s binary.
+- `da97d6f`: the ADR-0003 consumer sentence now states the per-target scope of CMake's Qt major check, which closes the pre-push suggestion.
+- CI run 45244390573 on `53efa45` passed both jobs.
+  - Jazzy (1m25s):
+    - `marine_colormap_widgets: Qt 5.15.13 (major 5, from qt_gui_cpp)`
+    - `Qt major 5 as qt_gui_cpp: libQt5Widgets.so.5;libQt5Gui.so.5;libQt5Core.so.5`
+    - `Summary: 273 tests, 0 errors, 0 failures, 27 skipped`
+  - Rolling (2m2s):
+    - `marine_colormap_widgets: Qt 6.10.2 (major 6, from qt_gui_cpp)`
+    - `Qt major 6 as qt_gui_cpp: libQt6Widgets.so.6;libQt6Gui.so.6;libQt6Core.so.6`
+    - `Summary: 273 tests, 0 errors, 0 failures, 27 skipped`
+
+### Findings
+- [ ] No issues found. LGTM.
