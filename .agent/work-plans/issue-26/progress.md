@@ -250,3 +250,27 @@ CI, first run for a pull request into `rolling` and first real Qt 5 evidence:
 **Decision**: address
 
 Read: the Integrated Review of pull request 27 at `ca8ed12`: two valid suggestions, no false positives, CI all-pass (run 45243563566: Jazzy configures `Qt 5.15.13 (major 5, from qt_gui_cpp)` and Rolling `Qt 6.10.2 (major 6, from qt_gui_cpp)`; `test_same_qt_major` passes on both against the distro's own `qt_gui_cpp` library; 273 tests, 0 errors, 0 failures, 27 skipped on each). Addressed: (1) the selection accepts `qt_gui_cpp_USE_QT_MAJOR_VERSION` only when it is a whole number (`MATCHES "^[0-9]+$"`), and the fatal message gives the value it saw, so an empty or odd value reaches the ADR-0003 error instead of a misleading CMake one; one code commit for backport. (2) ADR-0003's consumer sentence says that a consumer target linking both this library and the other Qt major stops at CMake's generate step, and one that keeps them in separate targets is not stopped; one docs commit for backport. The triage's note that cppcheck skips on Jazzy too (2.13.0) goes into the follow-up issue draft.
+
+## Implementation
+**Status**: complete
+**When**: 2026-11-23 14:00 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+
+**PR**: #27 at `da97d6f`
+**Addressed**: Integrated Review at `ca8ed12` (2026-11-23 13:58 -05:00)
+**Commits**: ddb8c8b, da97d6f
+
+### Actions
+- [x] Qt major variable accepted only when it matches `^[0-9]+$`; the fatal error prints the value seen — `marine_colormap_widgets/CMakeLists.txt:35`
+- [x] ADR-0003 consumer sentence: a consumer target linking both this library and the other Qt major stops at generate; separate targets are not stopped — `docs/decisions/0003-qt-major-follows-ros.md:80`
+
+### Verification
+Scratch configures (Rolling, stand-in `qt_gui_cppConfig.cmake` in the session scratchpad, removed):
+- value `5`, no Qt 6: `Qt 5.15.18 (major 5, from qt_gui_cpp)`
+- undefined, `Qt6::Widgets` present: `Qt 6.10.2 (major 6, from qt_gui_cpp)`; real tree via `./build.sh --parallel-workers 4 --packages-up-to marine_colormap marine_colormap_widgets`: same line, 2 packages finished
+- empty, no Qt 6: fatal error `... got qt_gui_cpp_USE_QT_MAJOR_VERSION=''.`
+- `5.15`, no Qt 6: fatal error `... qt_gui_cpp_USE_QT_MAJOR_VERSION='5.15'.`
+- empty or `5.15` with `Qt6::Widgets` present: Qt 6 branch (`Qt 6.10.2`). Kept: the target exists only because `qt_gui_cpp` found Qt 6, so taking 6 follows ROS's Qt packages, and it is the smallest change the review named.
+
+`./test.sh --parallel-workers 4 --packages-select marine_colormap marine_colormap_widgets`: `Summary: 273 tests, 0 errors, 0 failures, 27 skipped`.
+PR body camp paragraph already states the per-target case ("a camp target that links this library together with camp's own Qt 5 targets stops at CMake's generate step"); consistent, no edit needed.
