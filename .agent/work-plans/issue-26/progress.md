@@ -219,3 +219,24 @@ Re-run here: build of both packages ok; `Summary: 273 tests, 0 errors, 0 failure
 **Decision**: publish
 
 Read: the Local Review (Pre-Push) at `401658c`, verdict approved, ship recommended, two suggestions open: guard `qt_gui_cpp_USE_QT_MAJOR_VERSION` against an empty or non-numeric value so it reaches the clear fatal error (`marine_colormap_widgets/CMakeLists.txt:35`); ADR-0003 should say the generate-time Qt major disagreement stops "a consumer target that links both" (`docs/decisions/0003-qt-major-follows-ros.md:80`). They stay open and go through triage after publish together with what the first CI run shows, so one fix pass serves both. This is a project issue, so the host runs no full pre-commit pass. The pull request says `Part of #26`.
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-11-23 13:58 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+
+**PR**: #27 at `ca8ed12`
+**Sources**: 2 (Local Review (Pre-Push) @ `401658c` (covers `ca8ed12` via bookkeeping), CI rollup run 45243563566 @ `ca8ed12`); no GitHub reviews, inline or conversation comments, no Copilot review requested and no Copilot check-run
+**Cross-source confirmations**: 0
+**CI**: all-pass
+
+CI, first run for a pull request into `rolling` and first real Qt 5 evidence:
+- build-and-test (jazzy), `ros:jazzy-ros-core`, 1m44s, pass. Configure: `marine_colormap_widgets: Qt 5.15.13 (major 5, from qt_gui_cpp)`. `test_same_qt_major` passed against `/opt/ros/jazzy/lib/libqt_gui_cpp.so`: `Qt major 5 as qt_gui_cpp: libQt5Widgets.so.5;libQt5Gui.so.5;libQt5Core.so.5`. Build `Summary: 2 packages finished [17.2s]`; test `Summary: 2 packages finished [4.99s]` (14/14 and 8/8 passed); `Summary: 273 tests, 0 errors, 0 failures, 27 skipped`. cppcheck skipped (2.13.0, "known performance issues").
+- build-and-test (rolling), `ros:rolling-ros-core`, 1m48s, pass. Configure: `marine_colormap_widgets: Qt 6.10.2 (major 6, from qt_gui_cpp)`. `test_same_qt_major` passed against `/opt/ros/rolling/lib/qt_gui_cpp.so`: `Qt major 6 as qt_gui_cpp: libQt6Widgets.so.6;libQt6Gui.so.6;libQt6Core.so.6`. Build `Summary: 2 packages finished [10.9s]`; test `Summary: 2 packages finished [3.68s]` (14/14 and 8/8 passed); `Summary: 273 tests, 0 errors, 0 failures, 27 skipped`. cppcheck skipped (2.19.0, same reason).
+- Note for the follow-up issue: cppcheck skips on Jazzy too (2.13.0), not only on Rolling.
+
+### Findings
+- [ ] (suggestion, Local Review (Pre-Push) @ `401658c`) Valid. Today `if(DEFINED qt_gui_cpp_USE_QT_MAJOR_VERSION)` takes any value. Checked with CMake under `cmake_minimum_required(VERSION 3.8)`: an empty value makes the unquoted `set(MCW_QT_MAJOR ...)` unset the variable, so `find_package(Qt REQUIRED ...)` runs CMake's legacy FindQt module (CMP0084 OLD) and stops with "Could NOT find Qt3 (missing: QT_QT_LIBRARY QT_INCLUDE_DIR)"; `5.15` stops with "Could not find a package configuration file provided by \"Qt5.15\""; `6` where `qt_gui_cpp` failed to bring Qt 6 still calls `find_package(Qt6 REQUIRED ...)`, which finds `qt6-base-dev` (listed unconditionally) or fails with CMake's standard Qt6 message: the major is the one `qt_gui_cpp` named, so that case is correct. All three stop the build; the first two with a misleading message instead of the ADR-0003 fatal error. Smallest guard holding on both distros: replace the first condition with `if(qt_gui_cpp_USE_QT_MAJOR_VERSION MATCHES "^[0-9]+$")` (checked: `5` and `6` match; empty, `5.15` and undefined fall through, so Rolling still takes the `TARGET Qt6::Widgets` branch and Jazzy still takes `5`), and add the value to the fatal message ("qt_gui_cpp_USE_QT_MAJOR_VERSION='${qt_gui_cpp_USE_QT_MAJOR_VERSION}'") — `marine_colormap_widgets/CMakeLists.txt:35`
+- [ ] (suggestion, Local Review (Pre-Push) @ `401658c`) Valid. CMake's Qt major compatibility check (`COMPATIBLE_INTERFACE_STRING QT_MAJOR_VERSION`) is per target: it fires only when one target's link closure has both majors, so "A consumer that finds Qt 5 and links this library stops at CMake's generate step" overstates it. Reword to "A consumer target that links both this library and Qt 5 stops at CMake's generate step; a consumer that keeps them in separate targets is not stopped" — `docs/decisions/0003-qt-major-follows-ros.md:80`
+
+### False positives
