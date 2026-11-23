@@ -134,3 +134,13 @@ The selection rule, the versioned export, the two rosdep keys and the binary-ora
 - [ ] Use mru_transform's rosdep step verbatim (`--base-paths src`, `set -euo pipefail`, empty-list check).
 - [ ] In ADR-0003, record that Rolling's `qt_gui_cpp` already dropped the variable, and when the unconditional `qtbase5-dev` key must go.
 - [ ] In the PR's camp note, name `marine_simulation`'s `exec_depend` on camp as the path by which camp would be built on Rolling.
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-23 13:40 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: host (the plan review's verdict is ready; its four findings are low and each is taken during implementation; none changes scope or the owner's Qt rule)
+**After**: plan
+**Decision**: proceed
+
+Read: the Plan Review at `57d08d2`, verdict ready, four low findings, all taken by the implementer: (1) the proof test compares the major of every `libQt<N>*` entry of our library with `qt_gui_cpp`'s Core major; (2) the CI rosdep step is the model workflow's as it is (`--base-paths src`, `set -euo pipefail`, the empty-list check); (3) ADR-0003 records that `qt_gui_cpp_USE_QT_MAJOR_VERSION` is upstream's declared downstream interface but is already gone on Rolling, so the `Qt6::Widgets` branch is Rolling's only path and the fatal error is what a further upstream change gives, and that the unconditional `qtbase5-dev` key is dropped when Rolling's Ubuntu no longer has Qt 5; (4) the pull request's camp note names the `simulation` group path (`marine_simulation` has an `exec_depend` on camp). Host decisions on the planner's open questions: the test-only `QMouseEvent` constructor deprecation (Qt 6.4) is left alone and listed for the follow-up issue, under the owner's no-big-changes rule (the alternative was a one-line fix valid on both Qt majors); the Jazzy job moves to `ros:jazzy-ros-core` like the other ported repositories; the Rolling job uses `ros:rolling-ros-core` unpinned, like the models. Both Qt development keys are listed unconditionally because nothing on both distros installs only the Qt in use without a distro condition.
