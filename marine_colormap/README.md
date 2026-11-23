@@ -58,8 +58,10 @@ params.max = range.hi();
 ```
 
 See `../docs/decisions/0001-range-model.md`. The interactive colorbar widget that
-drives this model lives in the sibling `marine_colormap_widgets` package (Qt5);
-see that package and `../docs/decisions/0002-colorbar-widget.md`.
+drives this model lives in the sibling `marine_colormap_widgets` package (Qt 5 or
+Qt 6, the major ROS's `qt_gui_cpp` uses); see that package,
+`../docs/decisions/0002-colorbar-widget.md` and
+`../docs/decisions/0003-qt-major-follows-ros.md`.
 
 ## GPU (GLSL) usage
 
