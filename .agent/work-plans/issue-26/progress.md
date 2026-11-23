@@ -79,3 +79,58 @@ Read: the Issue Review, status complete, no principle row needing action. Its re
 **Plan**: `.agent/work-plans/issue-26/plan.md` at `57d08d2`
 
 The widget takes its Qt major from `qt_gui_cpp` (`qt_gui_cpp_USE_QT_MAJOR_VERSION` where set, as on Jazzy; else `TARGET Qt6::Widgets`, as on Rolling; else a fatal error), links and exports the versioned `Qt<N>::Widgets`/`Qt<N>Widgets`, declares both `qtbase5-dev` and `qt6-base-dev` with no distro condition, and adds a test that compares the built library's libQt<N>Core with `qt_gui_cpp`'s. Four commits (code, test, docs with a new ADR-0003, two-job CI), each cherry-picked to `jazzy`. Qt 6 is built and tested here (one test-only deprecation warning), and the Jazzy path is exercised through a stand-in only, so CI is the only real Qt 5 check.
+
+## Plan Review
+**Status**: complete
+**When**: 2026-11-23 13:34 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Verdict**: ready
+
+**Issue**: #26 — Port marine_colormap to ROS 2 Rolling; build marine_colormap_widgets against Qt 5 or Qt 6
+**Plan**: `.agent/work-plans/issue-26/plan.md` at `57d08d2`
+**Branch**: `feature/issue-26`
+
+### Evaluation
+
+| Dimension | Verdict | Notes |
+|---|---|---|
+| Scope | Good | Two files of code, one new test script, docs, one workflow; four commits, each cherry-pickable to `jazzy`. |
+| Issue alignment | Good | Covers every "Done when" item and every issue-review recommendation (selection written out, configure message, ADR record, `cmake_minimum_required` left and listed, Qt 5 checked/not-checked statement in the PR). Serves: "The owner's Rolling port (rolker/unh_marine_autonomy#415) and camp's Qt 6 port (rolker/camp#248). This repository has no goals or design document." Checked: no goals or design document in the repo; nothing breaks a stated project rule. |
+| File targeting | Good | All Qt 5 mentions found by grep are listed (CMake, `package.xml`, CI header, both READMEs, ADR-0002 Status line). camp is correctly left alone. |
+| Consequences | Good | Checked independently: camp's Jazzy CI clones `marine_colormap` `-b jazzy` and does `find_package(Qt5 ...)` explicitly, so after the backport it only gains an unused `qt6-base-dev`; camp is not built on Rolling (`rolling/ui` has no build or install; `marine_simulation` exec_depends on camp but unh_marine_simulation has no CI and #119 builds only asv_*/mbes_sim). Two small gaps below (findings 3, 4). |
+| Principle alignment | Good | Only what's needed: smallest selection plus a 30-line test. Test what breaks: the test's oracle is `qt_gui_cpp`'s own binary, not our CMake variable. Verify before claiming: Qt 5 is stated as CI/stand-in only. |
+| ADR compliance | Good | Repo ADR-0002 superseded on the Qt choice by a new ADR-0003 with a Status-line pointer only (cross-reference addendum rule). Workspace ADR-0013: entries via the persistence script. ADR-0017: no design document. |
+| ROS conventions | Good | Versioned `Qt<N>::Widgets` link and `Qt<N>Widgets` export, rosdep keys rather than CMake names, `qt_gui_cpp` as a build-only dependency (consumers follow the exported Qt, not `qt_gui_cpp`). |
+
+### Verification done for this review
+
+- **Selection rule.** `qt_gui_cpp-extras.cmake` read upstream: `humble`, `jazzy`, `kilted` contain only `set(qt_gui_cpp_USE_QT_MAJOR_VERSION 5)`; `rolling` (and installed 3.0.4) has `find_package(python_qt_binding REQUIRED)` + `find_package(Qt6 REQUIRED COMPONENTS Widgets Core)` and no variable; `lyrical` sets it from `python_qt_binding_QT_MAJOR_VERSION` then finds that Qt. The variable was added in 2016 (`db6de46e`, "export information about using Qt5 so that downstream packages can use the same version"), i.e. a deliberate downstream interface, and was removed on `rolling` by "Removed Qt5 (#345)". If Jazzy's variable disappeared, no `Qt6::Widgets` exists at that point (nothing before `find_package(qt_gui_cpp)` finds Qt) and configure stops with the fatal error; if Rolling's extras stopped finding Qt 6, the same. A silently wrong pick would need some earlier `find_package` to define `Qt6::Widgets` while `qt_gui_cpp` used Qt 5, and the step-2 test would then fail. On a machine with both Qt installed the rule never consults what is installed. A scratch configure here (`find_package(qt_gui_cpp)` + the rule) printed major 6, Qt 6.10.2, `$<TARGET_FILE:qt_gui_cpp::qt_gui_cpp>` = `/opt/ros/rolling/lib/qt_gui_cpp.so`, `CMAKE_OBJDUMP=/usr/bin/objdump`. An equally simple single rule exists (read `qt_gui_cpp::qt_gui_cpp`'s `INTERFACE_LINK_LIBRARIES`: `Qt5::Widgets` on Jazzy through the plain `target_link_libraries`, `Qt6::Widgets;Qt6::Core;...` on Rolling), but it parses a target property, so it is no more of an interface than the variable; the plan's rule is fine.
+- **Versionless targets.** `Qt5WidgetsConfig.cmake:251` creates `Qt::Widgets` only `if(... AND NOT TARGET Qt::Widgets)`; Qt 6's `Qt6WidgetsVersionlessAliasTargets.cmake` creates aliases only for names not yet defined (`_qt_internal_check_multiple_inclusion`). First major found wins, as the plan says. A consumer's `find_package(marine_colormap_widgets)` runs `find_package(Qt5Widgets)` on Jazzy and `find_package(Qt6Widgets)` on Rolling through the ament export, and does not find `qt_gui_cpp`.
+- **rosdep.** Jazzy `qt_gui_cpp/package.xml`: `qtbase5-dev` is `build_depend` only; `python_qt_binding` (jazzy) likewise; packages.ros.org noble: `ros-jazzy-qt-gui-cpp` Depends has `libqt5core5t64` and no `-dev` Qt; `ros-jazzy-python-qt-binding` brings `libpyside2-dev`/`pyqt5-dev`/`python3-pyqt5`, none of which depends on `qtbase5-dev` (Ubuntu noble index). Rolling `qt_gui_cpp` has `<build_export_depend>qt6-base-dev`. So no dependency `qt_gui_cpp` exports gives the Qt development package on both distros, and without a distro condition both keys are needed. Both keys resolve to themselves on `ubuntu:noble` and `ubuntu:resolute` (`rosdep resolve`). The offscreen plugin is in `libqt5gui5t64` / `libqt6gui6` (`dpkg -S`), dependencies of `qtbase5-dev` / `qt6-base-dev`.
+- **Proof test.** Jazzy's `qt_gui_cpp.so` NEEDs `libQt5Core.so.5` (its shlibs-derived Depends lists `libqt5core5t64` and no Widgets library); Rolling's NEEDs `libQt6Core.so.6` only; our current library NEEDs Widgets, Gui and Core. `objdump` comes from `ros-dev-tools` → `ros-build-essential` → `build-essential` in both containers.
+- **CI.** `ros:rolling-ros-core` and `ros:rolling-ros-core-resolute` have the same digest (`365c44cbb918`, 2026-11-12). `ros-jazzy-ros-core` already includes `ament_cmake_gtest`, `ament_lint_auto` and `ament_lint_common`; what `ros-base` adds (geometry2, rosbag2, urdf, kdl and the like) is used by neither package. mru_transform's `rolling` run with the same shape is green.
+- Not rebuilt here: the planner's Qt 6 build, test counts and mutation check were not repeated; the scratch configure above covers the selection and the test's inputs on Rolling.
+
+### Findings
+
+1. **[Principle alignment — Test what breaks]** (low) The step-2 test requires exactly one `libQt<N>Core` in each NEEDED list. That catches Qt 5 Core next to Qt 6 Core, but not a library whose other Qt entries (`libQt5Widgets`, `libQt5Gui`) disagree with its Core. Comparing the major of every `libQt<N>*` entry of our library (all must equal `qt_gui_cpp`'s Core major) costs one regex and closes that case; keep the comparison against `qt_gui_cpp`'s Core, since its Widgets entry is dropped as-needed.
+2. **[ROS conventions — CI]** (low) The planned `rosdep install ... --from-paths $(colcon list --paths-only --packages-up-to marine_colormap_widgets)` drops two things the model workflow has: `--base-paths src`, and `set -euo pipefail` plus the empty-list check, which turn a failing or empty `colcon list` into a job failure instead of a `rosdep` call with no paths. Copy the model's step as it is.
+3. **[Consequences]** (low) ADR-0003 should record two facts this review found, so a later reader does not re-derive them: the variable is upstream's declared downstream interface (2016) but Rolling already removed it, so the `TARGET Qt6::Widgets` branch is Rolling's only path and the fatal error is what a further upstream change produces; and the unconditional `qtbase5-dev` will stop resolving on Rolling when Rolling moves to an Ubuntu without Qt 5, which is the point at which that key is dropped.
+4. **[Consequences]** (low) The plan's camp paragraph says camp "is not built on Rolling anywhere today". True, but the manifest puts `camp` and `marine_colormap` in the `simulation` group and `marine_simulation` (`rolling` branch) has `<exec_depend>camp</exec_depend>`, so a future `--packages-up-to marine_simulation` on Rolling pulls camp in. Name that path in the PR's camp note; it already fails on Rolling through `rqt_gui_cpp`, so nothing changes in kind.
+
+### Open questions (facts for the host)
+
+- QMouseEvent deprecation: test-only, a warning not an error, and not in "Done when"; the port rule favours leaving it and listing it. The one-line form `QMouseEvent(type, pos, pos, button, buttons, Qt::NoModifier)` exists, undeprecated, in both Qt 5.15 and Qt 6, so fixing it is also safe; either is consistent with the rule.
+- Jazzy image `ros-core`: drops nothing this repository uses; it matches the ported repositories and exposes undeclared dependencies. Supported.
+- Rolling image `ros:rolling-ros-core`: identical to `-resolute` today and used by the green models; pinning only matters at Rolling's next Ubuntu move. Supported.
+
+### Summary
+
+The selection rule, the versioned export, the two rosdep keys and the binary-oracle test all hold up against the upstream sources, package indexes and the installed Rolling files; every way the rule can go wrong is a configure error or a test failure, not a silent wrong Qt. The findings are small and can be taken during implementation. Ready.
+
+### Recommended Actions
+
+- [ ] Make the step-2 check compare every `libQt<N>*` NEEDED entry of `marine_colormap_widgets` with `qt_gui_cpp`'s Core major.
+- [ ] Use mru_transform's rosdep step verbatim (`--base-paths src`, `set -euo pipefail`, empty-list check).
+- [ ] In ADR-0003, record that Rolling's `qt_gui_cpp` already dropped the variable, and when the unconditional `qtbase5-dev` key must go.
+- [ ] In the PR's camp note, name `marine_simulation`'s `exec_depend` on camp as the path by which camp would be built on Rolling.
