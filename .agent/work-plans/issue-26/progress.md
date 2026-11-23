@@ -144,3 +144,46 @@ The selection rule, the versioned export, the two rosdep keys and the binary-ora
 **Decision**: proceed
 
 Read: the Plan Review at `57d08d2`, verdict ready, four low findings, all taken by the implementer: (1) the proof test compares the major of every `libQt<N>*` entry of our library with `qt_gui_cpp`'s Core major; (2) the CI rosdep step is the model workflow's as it is (`--base-paths src`, `set -euo pipefail`, the empty-list check); (3) ADR-0003 records that `qt_gui_cpp_USE_QT_MAJOR_VERSION` is upstream's declared downstream interface but is already gone on Rolling, so the `Qt6::Widgets` branch is Rolling's only path and the fatal error is what a further upstream change gives, and that the unconditional `qtbase5-dev` key is dropped when Rolling's Ubuntu no longer has Qt 5; (4) the pull request's camp note names the `simulation` group path (`marine_simulation` has an `exec_depend` on camp). Host decisions on the planner's open questions: the test-only `QMouseEvent` constructor deprecation (Qt 6.4) is left alone and listed for the follow-up issue, under the owner's no-big-changes rule (the alternative was a one-line fix valid on both Qt majors); the Jazzy job moves to `ros:jazzy-ros-core` like the other ported repositories; the Rolling job uses `ros:rolling-ros-core` unpinned, like the models. Both Qt development keys are listed unconditionally because nothing on both distros installs only the Qt in use without a distro condition.
+
+## Implementation
+**Status**: complete
+**When**: 2026-11-23 13:47 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Branch**: feature/issue-26 at `e16a976`
+
+The plan's four commits, in its order, as amended by the Checkpoint; each ends "Backport to jazzy.":
+
+1. `16c0654` fix(widgets): take the Qt major from qt_gui_cpp — `find_package(qt_gui_cpp)`; `qt_gui_cpp_USE_QT_MAJOR_VERSION` if set, else `TARGET Qt6::Widgets` → 6, else a fatal error naming both expected signals; `find_package(Qt<N>)`, link `Qt<N>::Widgets`, export `Qt<N>Widgets`; configure prints `marine_colormap_widgets: Qt <ver> (major <N>, from qt_gui_cpp)`. `package.xml`: `qt_gui_cpp` build_depend, `qt6-base-dev` beside `qtbase5-dev` (no condition), description and comments.
+2. `47549e0` test(widgets): check the library uses qt_gui_cpp's Qt major — `test/check_same_qt_major.cmake` + `ament_add_test(test_same_qt_major ...)`: objdump -p on our library and on `$<TARGET_FILE:qt_gui_cpp::qt_gui_cpp>`; exactly one `libQt<N>Core` in qt_gui_cpp's NEEDED list; **every** `libQt<N>*` entry of our library must have that major (review finding 1).
+3. `ccbbaa8` docs: ADR-0003 (rule, rejected rules, both facts from the review: Rolling already removed the upstream variable so `Qt6::Widgets` is its only path and a further change gives the fatal error; `qtbase5-dev` is dropped when Rolling's Ubuntu has no Qt 5), ADR-0002 Status-line pointer only, both READMEs.
+4. `e16a976` ci: jobs `jazzy` (`ros:jazzy-ros-core`) and `rolling` (`ros:rolling-ros-core`, `if: (github.base_ref || github.ref_name) != 'jazzy'`), triggers `rolling` and `jazzy`; rosdep step as mru_transform's (`--base-paths src`, `set -euo pipefail`, empty-list check, no `-r`); build with `--event-handlers console_cohesion+` so the Qt configure line is in the log; test step sources only `/opt/ros/<distro>`; header rewritten.
+
+### Verification (Rolling, this machine: Ubuntu 26.04, Qt 5.15.18 and Qt 6.10.2 both installed)
+
+- `./build.sh --parallel-workers 4 --packages-up-to marine_colormap marine_colormap_widgets`: `Summary: 2 packages finished [0.39s]` (configure line on the first build: `-- marine_colormap_widgets: Qt 6.10.2 (major 6, from qt_gui_cpp)`).
+- `./test.sh --parallel-workers 4 --packages-select marine_colormap marine_colormap_widgets`: `100% tests passed, 0 tests failed out of 14`, `100% tests passed, 0 tests failed out of 8`, `Summary: 273 tests, 0 errors, 0 failures, 27 skipped` (planner's baseline 269; the new script adds `test_same_qt_major` and one case each to copyright and lint_cmake; the 27 skips are cppcheck, as before).
+- `objdump -p libmarine_colormap_widgets.so`: `libQt6Widgets.so.6`, `libQt6Gui.so.6`, `libQt6Core.so.6`; no Qt 5. Exported extras: `Qt6Widgets`. Rolling's `qt_gui_cpp.so` NEEDs `libQt6Core.so.6`.
+- Widget gtest run 10 times offscreen (`QT_QPA_PLATFORM=offscreen`): 10 × `[  PASSED  ] 5 tests.`
+- Qt 6 is picked because of `qt_gui_cpp`: through a stand-in `qt_gui_cppConfig.cmake` (variable = 5, `qt_gui_cpp::qt_gui_cpp` imported from a scratch library NEEDing `libQt5Core.so.5`) the unchanged tree configured `Qt 5.15.18 (major 5, from qt_gui_cpp)`, linked `libQt5*` only, and passed the widget gtest 5/5 and `test_same_qt_major` (`Qt major 5 as qt_gui_cpp: libQt5Widgets.so.5;libQt5Gui.so.5;libQt5Core.so.5`). The same stand-in without the variable gave the fatal error.
+- Proof test failing cases: (a) forced Qt 5 build on Rolling (`set(MCW_QT_MAJOR 5)` in a scratch copy): `Qt major mismatch: libQt5Widgets.so.5 is 5, qt_gui_cpp's is 6`; (b) a constructed mixed library NEEDing `libQt6Core.so.6` and `libQt5Widgets.so.5` (Core agrees, Widgets does not): `Qt major mismatch: libQt5Widgets.so.5 is 5, qt_gui_cpp's is 6`.
+- Rolling job rehearsed under `env -i` (only `/opt/ros/rolling/setup.bash` sourced, a copy of the tree as `$GITHUB_WORKSPACE`, `../ws` beside it): Init rosdep (already initialised), Create workspace, Install ROS dependencies (`#All required rosdeps installed successfully`, both package paths listed), Build (configure line printed under console_cohesion+), Test, Test results (`Summary: 273 tests, 0 errors, 0 failures, 27 skipped`). Not rehearsed: `apt-get update` and the `ros-dev-tools` install (need root; installed here already), `actions/checkout`, `rosdep update` (the existing cache was used), the container image itself; `ROS_DISTRO=rolling` was passed by hand (the ros images set it); `--parallel-workers 4` was added locally only.
+
+### Unverified on Jazzy
+
+Not installed here (Ubuntu 26.04, no Docker). Unverified: `find_package(qt_gui_cpp)` and the variable on real Jazzy, `$<TARGET_FILE:qt_gui_cpp::qt_gui_cpp>` and its NEEDED list there, Qt 5.15.13 with GCC 13, rosdep resolving both Qt keys on noble in the container, and the `ros-core` image having everything the jobs use. Expected first Jazzy CI run: rosdep installs `qtbase5-dev` and `qt6-base-dev`; the build log shows `marine_colormap_widgets: Qt 5.15.x (major 5, from qt_gui_cpp)`; `test_same_qt_major` prints `Qt major 5 as qt_gui_cpp: ...libQt5...`; cppcheck runs for real (not skipped). The rolling job is the run rehearsed above.
+
+### Not changed, as decided
+
+The test-only `QMouseEvent` deprecation warning (Qt 6.4) at `test/test_colormap_legend_widget.cpp:62` is left alone (Checkpoint).
+
+### camp between this merge and camp's own port (for the pull request)
+
+Nothing changes on Jazzy: `qt_gui_cpp` says 5, the export is `Qt5Widgets` as today (rosdep also installs `qt6-base-dev`, unused). On Rolling, camp's configure stops at CMake's generate step with the Qt major disagreement (`INTERFACE_QT_MAJOR_VERSION of "Qt6::Widgets" does not agree with the value of QT_MAJOR_VERSION already determined`) for any camp target that links `marine_colormap_widgets` and camp's own `Qt5::` targets: a loud failure, not a silent mixed process, and the same state camp is already in on Rolling through `rqt_gui_cpp`. camp is not built on Rolling anywhere today (no `rolling` branch, no CI, no `rolling/ui` install), but the `simulation` group reaches it through `marine_simulation`'s `<exec_depend>camp</exec_depend>`, so a future `--packages-up-to marine_simulation` on Rolling would pull camp in and hit this. camp's own port is rolker/camp#248, which must take the same rule (ADR-0003).
+
+### Left alone, for the follow-up issue
+
+- `cmake_minimum_required(VERSION 3.8)` in both packages (CMake 4 deprecation warning).
+- The Qt 6.4 `QMouseEvent` constructor deprecation at `marine_colormap_widgets/test/test_colormap_legend_widget.cpp:62` (both-version form: `QMouseEvent(type, pos, pos, button, buttons, Qt::NoModifier)`).
+- cppcheck skipped on Rolling (`ament_cppcheck` with cppcheck 2.19.0, #415).
+- `CONTRIBUTING.md` points at a missing `.agents/README.md` and says pull requests go to `jazzy`.
+- The CI installs `ros-dev-tools` without `git`, so `actions/checkout` falls back to the REST API download (as before this change; nothing here needs a `.git`).
