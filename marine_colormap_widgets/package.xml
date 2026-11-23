@@ -3,7 +3,7 @@
 <package format="3">
   <name>marine_colormap_widgets</name>
   <version>0.1.0</version>
-  <description>Qt5 widgets for the marine_colormap library: an interactive
+  <description>Qt widgets (Qt 5 or Qt 6, the major ROS's qt_gui_cpp uses) for the marine_colormap library: an interactive
   colorbar legend (ColormapLegendWidget) that paints the value-&gt;color mapping
   and lets an operator drag range handles to pin a manual window over an outlier
   band. Owns a marine_colormap::RangeModel and emits rangeChanged on drag/reset.
@@ -14,10 +14,16 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>marine_colormap</depend>
-  <!-- Qt via the rosdep key (not the bare CMake name "Qt5Widgets"), so
-       `rosdep install` pulls the Qt5 dev headers + the offscreen platform
-       plugin CI needs for the headless widget test. -->
+  <!-- CMake reads qt_gui_cpp only to learn which Qt major ROS uses (ADR-0003);
+       consumers follow the exported Qt, not qt_gui_cpp. -->
+  <build_depend>qt_gui_cpp</build_depend>
+  <!-- Qt via the rosdep keys (not the bare CMake names), so `rosdep install`
+       pulls the Qt dev headers + the offscreen platform plugin CI needs for the
+       headless widget test. Both majors are listed with no condition: Jazzy's
+       qt_gui_cpp does not bring qtbase5-dev, and the build uses only the one
+       qt_gui_cpp names (ADR-0003). -->
   <depend>qtbase5-dev</depend>
+  <depend>qt6-base-dev</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
