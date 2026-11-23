@@ -32,7 +32,7 @@ find_package(marine_colormap REQUIRED)
 # qt_gui_cpp_USE_QT_MAJOR_VERSION (Humble to Kilted, Lyrical); Rolling's
 # qt_gui_cpp no longer sets it and instead finds Qt 6 itself.
 find_package(qt_gui_cpp REQUIRED)
-if(DEFINED qt_gui_cpp_USE_QT_MAJOR_VERSION)
+if(qt_gui_cpp_USE_QT_MAJOR_VERSION MATCHES "^[0-9]+$")
   set(MCW_QT_MAJOR ${qt_gui_cpp_USE_QT_MAJOR_VERSION})
 elseif(TARGET Qt6::Widgets)
   set(MCW_QT_MAJOR 6)
@@ -40,7 +40,9 @@ else()
   message(FATAL_ERROR
     "marine_colormap_widgets: cannot tell which Qt major qt_gui_cpp uses. "
     "Expected qt_gui_cpp to set qt_gui_cpp_USE_QT_MAJOR_VERSION, or to "
-    "define the Qt6::Widgets target (Rolling). See docs/decisions/0003.")
+    "define the Qt6::Widgets target (Rolling); got "
+    "qt_gui_cpp_USE_QT_MAJOR_VERSION='${qt_gui_cpp_USE_QT_MAJOR_VERSION}'. "
+    "See docs/decisions/0003.")
 endif()
 find_package(Qt${MCW_QT_MAJOR} REQUIRED COMPONENTS Widgets)
 message(STATUS "marine_colormap_widgets: Qt ${Qt${MCW_QT_MAJOR}Widgets_VERSION} "
