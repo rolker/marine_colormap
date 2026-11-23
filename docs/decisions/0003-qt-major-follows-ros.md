@@ -78,9 +78,10 @@ Rejected:
   the variable and stops finding Qt 6 (or finds Qt 7), configure stops with
   the fatal error rather than guessing; the rule is then revisited.
 - **Consumers must follow the same rule.** The exported Qt is Qt 6 on
-  Rolling. A consumer that finds Qt 5 and links this library stops at CMake's
-  generate step. camp (rolker/camp#248) must take the same rule before it
-  builds on Rolling; on Jazzy nothing changes for it.
+  Rolling. A consumer target that links both this library and the other Qt
+  major stops at CMake's generate step; a consumer that keeps them in separate
+  targets is not stopped. camp (rolker/camp#248) must take the same rule
+  before it builds on Rolling; on Jazzy nothing changes for it.
 - `qt_gui_cpp` is a build_depend only: CMake reads it to learn the major;
   consumers follow the exported Qt, not `qt_gui_cpp`.
 
