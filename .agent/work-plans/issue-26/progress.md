@@ -342,3 +342,13 @@ CI run 45245198134 at `f4f8335` (same code as `53efa45`):
 - [x] No open findings: both earlier suggestions are fixed (`ddb8c8b`, `da97d6f`) and nothing new is raised at `f4f8335`.
 
 ### False positives
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-23 14:11 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: owner
+**After**: merge
+**Decision**: merge
+
+The owner's answers, 2026-11-23: "Merge when CI is green (Recommended)" for pull request 27; "Backport right after (Recommended)" for the hand backport to `jazzy`; "Open it (Recommended)" for the follow-up issue in this repository. The host merges only after the CI run on the pushed records passes.
