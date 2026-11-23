@@ -209,3 +209,13 @@ Re-run here: build of both packages ok; `Summary: 273 tests, 0 errors, 0 failure
 ### Findings
 - [ ] (suggestion) Guard `qt_gui_cpp_USE_QT_MAJOR_VERSION` against a defined-but-empty or non-numeric value (Lyrical assigns it from python_qt_binding) so it reaches the clear fatal error, e.g. `MATCHES "^[0-9]+$"`; harmless today since Lyrical's own find fails first (Gemini, Claude adversarial) — `marine_colormap_widgets/CMakeLists.txt:35`
 - [ ] (suggestion) ADR wording: CMake's generate-time Qt major disagreement fires only when one target links both majors; a consumer that finds Qt 5 and links this library into a different target than its Qt 5 code is not stopped. Say "a consumer target that links both" (Codex) — `docs/decisions/0003-qt-major-follows-ros.md:80`
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-23 13:55 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: host (the pre-push review approved round 1 with no must-fix; the Qt 5 path cannot be built on the development machine, so the pushed branch's first Jazzy run is the first real evidence for it)
+**After**: publish
+**Decision**: publish
+
+Read: the Local Review (Pre-Push) at `401658c`, verdict approved, ship recommended, two suggestions open: guard `qt_gui_cpp_USE_QT_MAJOR_VERSION` against an empty or non-numeric value so it reaches the clear fatal error (`marine_colormap_widgets/CMakeLists.txt:35`); ADR-0003 should say the generate-time Qt major disagreement stops "a consumer target that links both" (`docs/decisions/0003-qt-major-follows-ros.md:80`). They stay open and go through triage after publish together with what the first CI run shows, so one fix pass serves both. This is a project issue, so the host runs no full pre-commit pass. The pull request says `Part of #26`.
