@@ -71,3 +71,11 @@ issue: 26
 **Decision**: proceed
 
 Read: the Issue Review, status complete, no principle row needing action. Its recommendations go to the planner as input, each to be settled in the plan with its reason: how the Qt major is selected (from what `qt_gui_cpp` brings, per the owner's rule "Follow ROS's Qt packages", never from `$ROS_DISTRO`), confirmed for Jazzy by reading upstream; what `ament_export_dependencies` exports so camp gets the same Qt; how rosdep still installs Qt on each distro; CI showing which Qt each job built; the record of the decision next to ADR-0002; the stale Qt 5 wording; which base image the Rolling job can use. `cmake_minimum_required(VERSION 3.8)` is left alone and listed for a follow-up issue.
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-11-23 13:27 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Plan**: `.agent/work-plans/issue-26/plan.md` at `57d08d2`
+
+The widget takes its Qt major from `qt_gui_cpp` (`qt_gui_cpp_USE_QT_MAJOR_VERSION` where set, as on Jazzy; else `TARGET Qt6::Widgets`, as on Rolling; else a fatal error), links and exports the versioned `Qt<N>::Widgets`/`Qt<N>Widgets`, declares both `qtbase5-dev` and `qt6-base-dev` with no distro condition, and adds a test that compares the built library's libQt<N>Core with `qt_gui_cpp`'s. Four commits (code, test, docs with a new ADR-0003, two-job CI), each cherry-picked to `jazzy`. Qt 6 is built and tested here (one test-only deprecation warning), and the Jazzy path is exercised through a stand-in only, so CI is the only real Qt 5 check.
